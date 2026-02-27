@@ -158,7 +158,7 @@ Given: школа использует Zedly на freemium-плане
   And: 7 из 8 учителей школы активно использовали платформу за последние 30 дней
      (т.е. доля активных учителей ≥ 85%)
 
-When: директор (пользователь с ролью school_admin) входит в панель школы
+When: директор (пользователь с ролью director) входит в панель школы
 
 Then: система показывает уведомление-баннер:
      «92% ваших учителей используют Zedly — перейдите на школьную лицензию»
@@ -221,7 +221,7 @@ Then: ученик привязывается к классу через telegra
 ### 9. Генерация отчёта РОНО — сводный по району
 
 ```
-Given: пользователь авторизован с ролью district_admin (РОНО)
+Given: пользователь авторизован с ролью inspector (РОНО)
   And: выбирает период (учебный квартал) и предмет
 
 When: нажимает «Сформировать отчёт»
@@ -243,7 +243,7 @@ Then: система ставит задачу в очередь и возвра
 ### 10. Генерация отчёта РОНО — выгрузка в Excel
 
 ```
-Given: пользователь с ролью district_admin просматривает сводный отчёт района
+Given: пользователь с ролью inspector просматривает сводный отчёт района
 
 When: нажимает «Экспорт в Excel»
 
@@ -261,7 +261,7 @@ Then: формируется .xlsx-файл с листами:
 ### 11. Межшкольный челлендж — создание
 
 ```
-Given: пользователь с ролью district_admin или school_admin авторизован
+Given: пользователь с ролью inspector или director авторизован
 
 When: создаёт межшкольный челлендж, указывая:
        — название, предмет, класс (параллель)
@@ -377,6 +377,107 @@ Then: система извлекает текст из документа
 
 ---
 
+## Покрытие API acceptance-критериями
+
+| Endpoint | Acceptance scenario(s) | Статус покрытия |
+|---|---|---|
+| `POST /auth/login` | AC-17 | ✅ |
+| `POST /auth/telegram` | 7, AC-17 | ✅ |
+| `POST /auth/refresh` | AC-17 | ✅ |
+| `POST /auth/logout` | AC-17 | ✅ |
+| `POST /auth/invite/accept` | 8 | ✅ |
+| `POST /users/register` | 7, AC-17 | ✅ |
+| `GET /users/me` | AC-18 | ✅ |
+| `PATCH /users/me` | AC-18 | ✅ |
+| `GET /schools/{school_id}/users` | AC-19 | ✅ |
+| `POST /classes/{class_id}/invite` | 8, AC-19 | ✅ |
+| `POST /tests` | 1 | ✅ |
+| `GET /tests/{test_id}` | 1 | ✅ |
+| `POST /tests/{test_id}/assign` | 1 | ✅ |
+| `POST /tests/{test_id}/sessions` | 2 | ✅ |
+| `POST /sessions/{session_id}/answers` | 2, 5 | ✅ |
+| `POST /sessions/{session_id}/finish` | 2, 3, 5 | ✅ |
+| `GET /marketplace/tests` | AC-20 | ✅ |
+| `GET /marketplace/tests/{test_id}` | AC-20 | ✅ |
+| `POST /marketplace/tests/{test_id}/publish` | AC-20 | ✅ |
+| `POST /marketplace/tests/{test_id}/rate` | AC-20 | ✅ |
+| `POST /marketplace/tests/{test_id}/copy` | AC-20 | ✅ |
+| `GET /analytics/teacher/dashboard` | 2, 6 | ✅ |
+| `GET /analytics/director/dashboard` | 6 | ✅ |
+| `GET /analytics/inspector/dashboard` | 9, 10 | ✅ |
+| `POST /reports/generate` | 9, 10 | ✅ |
+| `GET /reports/{report_id}/status` | AC-21 | ✅ |
+| `GET /reports/{report_id}/download` | 9, 10, AC-21 | ✅ |
+
+### AC-17: Auth lifecycle (login / refresh / logout)
+
+```
+Given: пользователь с ролью teacher или director имеет активный аккаунт
+
+When: выполняет POST /auth/login
+  And: выполняет POST /auth/refresh после истечения access token
+  And: выполняет POST /auth/logout
+
+Then: refresh токен ротируется при refresh
+  And: после logout refresh токен отозван
+  And: повторный refresh с отозванным токеном возвращает 401
+```
+
+### AC-18: Профиль пользователя (GET/PATCH /users/me)
+
+```
+Given: пользователь авторизован
+
+When: вызывает GET /users/me
+  And: обновляет profile поля через PATCH /users/me
+
+Then: возвращается профиль текущего пользователя
+  And: разрешённые поля обновляются
+  And: запрещённые поля (email/phone/password) отклоняются с 400
+```
+
+### AC-19: Пользователи школы и инвайты класса
+
+```
+Given: директор или учитель авторизован в своей школе
+
+When: директор вызывает GET /schools/{school_id}/users
+  And: учитель вызывает POST /classes/{class_id}/invite
+
+Then: директор видит пользователей своей школы согласно роли
+  And: учитель получает invite-код только для своего класса
+  And: доступ к чужой школе/классу возвращает 403
+```
+
+### AC-20: Marketplace API
+
+```
+Given: учитель авторизован
+
+When: просматривает список marketplace-тестов
+  And: открывает карточку теста
+  And: копирует тест
+  And: публикует собственный тест
+  And: ставит рейтинг после копирования
+
+Then: copy создаёт новую запись теста в библиотеке учителя
+  And: publish проходит quality-check и модерационные проверки
+  And: rating разрешён только после copy и не для собственного теста
+```
+
+### AC-21: Отчёты — статус и скачивание
+
+```
+Given: отчёт создан через POST /reports/generate
+
+When: пользователь запрашивает GET /reports/{report_id}/status
+  And: после готовности запрашивает GET /reports/{report_id}/download
+
+Then: status отражает pending/processing/completed/failed
+  And: download отдаёт presigned URL только при completed
+  And: до готовности возвращается 409
+```
+
 ## Сводная таблица сценариев
 
 | № | Сценарий | Приоритет | Связанные компоненты |
@@ -397,6 +498,11 @@ Then: система извлекает текст из документа
 | 14 | Сертификат — массовый | P2 | PDF queue, ZIP, уведомления |
 | 15 | AI-тест по теме | P2 | AI integration, test builder |
 | 16 | AI-тест по документу | P3 | AI integration, file parser |
+| 17 | Auth lifecycle (login/refresh/logout) | P1 | Auth API, token rotation, revoke |
+| 18 | Профиль пользователя (GET/PATCH /users/me) | P1 | Users API, profile validation |
+| 19 | Пользователи школы и инвайты класса | P1 | Users API, invite flow, RBAC |
+| 20 | Marketplace API | P2 | Marketplace API, quality/rating checks |
+| 21 | Отчёты: status/download | P1 | Reports API, async pipeline |
 
 ---
 

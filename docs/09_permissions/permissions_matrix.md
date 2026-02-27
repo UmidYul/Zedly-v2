@@ -44,6 +44,28 @@ scope: RBAC — роли, действия, изоляция данных, edge 
 
 ---
 
+## 1.1 Канонические permission-key и обратная совместимость
+
+Начиная с версии 1.1 каноническими считаются ключи из этой матрицы.
+Ключи из ранних role-документов считаются **алиасами** и должны маппиться на канонические при миграции документации/API.
+
+| Legacy key (в role docs) | Canonical key (в этой матрице) |
+|---|---|
+| `use_ai_generation` | `create_test_ai_generation` |
+| `assign_test_to_own_class` | `assign_test_to_class` |
+| `view_own_class_results` | `view_class_results` |
+| `view_marketplace_tests` | `view_test_marketplace` |
+| `copy_marketplace_test` | `copy_test_from_marketplace` |
+| `invite_students` | `invite_students_to_class` |
+| `view_school_aggregate_analytics` | `view_school_analytics` |
+| `view_teacher_activity` | `view_school_teacher_activity` |
+| `view_district_aggregate_analytics` | `view_district_analytics` |
+| `view_school_details` | `view_school_in_district` |
+
+Role slug alignment:
+- `inspector` = канонический slug роли РОНО (алиас: `district_admin`).
+- `director` = канонический slug роли директора (алиас: `school_admin`).
+
 ## 2. Основная матрица разрешений
 
 ### 2.1 Управление тестами
