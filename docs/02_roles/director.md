@@ -58,9 +58,9 @@
 
 ```
 АНАЛИТИКА ШКОЛЫ
-✅ view_school_aggregate_analytics  — агрегированная аналитика всей школы
+🔒 view_school_aggregate_analytics  — агрегированная аналитика всей школы (только платный план)
 ✅ view_class_analytics_all         — аналитика любого класса в своей школе
-✅ view_teacher_activity            — активность учителей: тестов создано, учеников охвачено
+🔒 view_teacher_activity            — активность учителей: тестов создано, учеников охвачено (только платный план)
 ✅ view_subject_performance         — успеваемость по предметам в разрезе классов
 ✅ view_ntt_readiness_school        — NTT Readiness Score по всем выпускным классам
 ✅ view_trends_by_quarter           — динамика по четвертям/учебному году
@@ -86,6 +86,8 @@
 ✅ edit_school_profile              — название школы, регион, контакты
 ✅ set_school_logo                  — загрузить логотип (появляется на сертификатах)
 ```
+
+> Примечание: для консистентности RBAC `director` использует канонические права `view_school_analytics` и `view_school_teacher_activity` из `permissions_matrix.md`; ключи выше — человекочитаемые алиасы.
 
 ### 4.2 Что директор НЕ МОЖЕТ делать
 

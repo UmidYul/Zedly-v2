@@ -907,6 +907,30 @@ CREATE RULE audit_logs_no_delete AS ON DELETE TO audit_logs DO INSTEAD NOTHING;
 | `rating_avg`, `rating_count` | Рейтинг |
 | `copies_count`, `copies_last_30d` | Статистика копирований |
 
+### report_jobs
+
+Очередь асинхронной генерации отчётов (PDF/XLSX) для директора, инспектора и министерства.
+
+| Колонка | Тип | Описание |
+|---|---|---|
+| `id` | VARCHAR(50) PK | `'rpt_' + nanoid` |
+| `school_id` | VARCHAR(50) NULL | Для school-scoped отчётов; NULL для district/national |
+| `requested_by_user_id` | VARCHAR(50) FK → users | Инициатор отчёта |
+| `scope_level` | VARCHAR(20) | `school` / `district` / `national` |
+| `scope_id` | VARCHAR(50) | `school_id` / `district_id` / `country_code` |
+| `template_key` | VARCHAR(100) | Шаблон отчёта (`roono_summary_pdf`, `district_xlsx`, ...) |
+| `format` | VARCHAR(10) | `pdf` / `xlsx` |
+| `status` | VARCHAR(20) | `queued` / `processing` / `completed` / `failed` / `expired` |
+| `params_json` | JSONB | Параметры периода и фильтров |
+| `result_url` | TEXT NULL | Presigned URL готового файла |
+| `expires_at` | TIMESTAMPTZ NULL | TTL ссылки |
+| `error_code` | VARCHAR(50) NULL | Код ошибки при `failed` |
+| `created_at` | TIMESTAMPTZ | Время постановки в очередь |
+| `started_at` | TIMESTAMPTZ NULL | Время старта обработки |
+| `completed_at` | TIMESTAMPTZ NULL | Время завершения |
+
+Индексы: `(status, created_at)`, `(requested_by_user_id, created_at DESC)`, `(scope_level, scope_id, created_at DESC)`.
+
 ### ntt_attempts
 
 | Колонка | Тип | Описание |

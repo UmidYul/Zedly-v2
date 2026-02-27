@@ -211,3 +211,27 @@ for topic in class_topics:
 ---
 
 *Документ поддерживается командой аналитики Zedly. При изменении логики расчёта любой метрики — обновить этот файл и проставить версию.*
+
+---
+
+## Реестр продуктовых KPI (нормализованный словарь)
+
+Ниже — KPI, используемые в feature-спеках (`docs/03_features/*`), приведённые к формальным metric-key.
+
+| Metric key | Источник KPI в features | Формула / правило расчёта |
+|---|---|---|
+| `test_creation_time_ai_p50_sec` | AI Test Generation: «время создания теста через AI» | Медиана `completed_at - started_at` для AI-flow, секунды |
+| `test_creation_time_manual_p50_sec` | Test Engine: «время создания теста вручную» | Медиана времени в manual builder |
+| `ai_question_acceptance_rate` | AI Test Generation: «% принятых без редактирования» | `accepted_without_edit / generated_total * 100` |
+| `ai_needs_review_rate` | AI Test Generation: «% вопросов needs_review» | `needs_review_count / generated_total * 100` |
+| `ai_feature_retention_30d` | AI Test Generation: «retention повторного использования» | Доля учителей, использовавших AI повторно за 30 дней |
+| `challenge_acceptance_rate` | School Challenge: «accepted / sent» | `accepted_challenges / sent_challenges * 100` |
+| `challenge_completion_rate` | School Challenge: «участники, завершившие челлендж» | `completed_participants / enrolled_participants * 100` |
+| `telegram_linked_students_rate` | Telegram Integration: «% учеников с привязанным Telegram» | `students_with_telegram / total_students * 100` |
+| `telegram_notification_delivery_rate` | Telegram Integration: «доставляемость уведомлений» | `delivered_notifications / sent_notifications * 100` |
+| `notification_latency_p95_sec` | Telegram Integration: «время до уведомления родителю» | P95 `sent_at - event_at`, секунды |
+| `bot_test_completion_rate` | Telegram Integration: «completion через бот» | `completed_bot_sessions / started_bot_sessions * 100` |
+| `simulator_screen_load_p95_ms` | NTT Simulator: «время загрузки экрана» | P95 latency загрузки, ms |
+
+Правило консистентности: при добавлении KPI в `docs/03_features/*` необходимо добавить его в этот реестр (ключ, формулу, единицу).
+
