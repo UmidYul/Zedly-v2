@@ -48,7 +48,7 @@ def test_cross_school_hidden_and_ip_blocking(client: TestClient) -> None:
 
     for _ in range(11):
         response = client.get("/schools/school_B/users", headers=auth)
-        assert response.status_code in (404, 429)
+        assert response.status_code in (403, 429)
 
     blocked = client.get("/users/me", headers=auth)
     assert blocked.status_code == 429
@@ -63,7 +63,7 @@ def test_create_test_ignores_school_id_spoofing(client: TestClient) -> None:
         headers=auth,
         json={"title": "Spoof check", "mode": "standard", "school_id": "school_B"},
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.json()["school_id"] == "school_A"
 
 
@@ -72,7 +72,7 @@ def test_class_invite_assignment_scope(client: TestClient) -> None:
     auth = _auth_header(login_payload["access_token"])
 
     forbidden = client.post("/classes/cls_B_8A/invite", headers=auth)
-    assert forbidden.status_code == 404
+    assert forbidden.status_code == 403
 
     allowed = client.post("/classes/cls_A_7A/invite", headers=auth)
     assert allowed.status_code == 200

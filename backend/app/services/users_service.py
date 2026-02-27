@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import timedelta
 
-from app.core.constants import FREEMIUM_STUDENT_LIMIT_PER_TEACHER, INVITE_TTL_HOURS
+from app.core.constants import INVITE_TTL_HOURS
 from app.core.errors import AppError
 from app.core.security import generate_code, now_utc
 from app.core.types import ErrorCode, Role
@@ -60,7 +60,7 @@ class UsersService:
                 resource_id=school_id,
                 ip=None,
             )
-            raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="School not found")
+            raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Cross-school access denied")
 
         try:
             data_store = get_data_store()
@@ -99,25 +99,13 @@ class UsersService:
                 resource_id=class_id,
                 ip=None,
             )
-            raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="Class not found")
+            raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Cross-school access denied")
 
         if current_user.role not in (Role.TEACHER, Role.DIRECTOR):
             raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Role cannot create class invite")
 
         if current_user.role == Role.TEACHER and school_class.teacher_id != current_user.id:
             raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Teacher is not assigned to class")
-
-        if current_user.role == Role.TEACHER:
-            try:
-                teacher_students_count = data_store.count_students_for_teacher(current_user.id)
-            except BackendUnavailableError as exc:
-                raise _service_unavailable() from exc
-            if teacher_students_count >= FREEMIUM_STUDENT_LIMIT_PER_TEACHER:
-                raise AppError(
-                    status_code=403,
-                    code=ErrorCode.PLAN_UPGRADE_REQUIRED.value,
-                    message="Freemium student limit reached",
-                )
 
         code = generate_code(6)
         expires_at = now_utc() + timedelta(hours=INVITE_TTL_HOURS)

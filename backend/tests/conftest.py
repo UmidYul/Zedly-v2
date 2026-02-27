@@ -33,3 +33,21 @@ def login_teacher(client: TestClient) -> dict:
     )
     assert response.status_code == 200
     return response.json()
+
+
+def login_student(client: TestClient) -> dict:
+    response = client.post(
+        "/auth/login",
+        json={"email": "studentA@school.uz", "password": "student-pass"},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def login_director(client: TestClient) -> dict:
+    response = client.post(
+        "/auth/login",
+        json={"email": "directorA@school.uz", "password": "director-pass"},
+    )
+    assert response.status_code == 200
+    return response.json()

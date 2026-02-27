@@ -5,21 +5,23 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
-from app.core.constants import ACCESS_TOKEN_TTL, LOCKOUT_SECONDS, LOGIN_WINDOW_SECONDS, MAX_LOGIN_ATTEMPTS_PER_WINDOW, REFRESH_TOKEN_TTL
+from app.core.constants import ACCESS_TOKEN_TTL, FREEMIUM_STUDENT_LIMIT_PER_TEACHER, LOCKOUT_SECONDS, LOGIN_WINDOW_SECONDS, MAX_LOGIN_ATTEMPTS_PER_WINDOW, ONBOARDING_TOKEN_TTL, REFRESH_TOKEN_TTL
 from app.core.errors import AppError
-from app.core.permissions import canonical_payload_permissions, canonical_role
+from app.core.permissions import canonical_payload_permissions
+from app.core.settings import settings
 from app.core.security import (
     create_access_token,
     generate_refresh_token,
     hash_refresh_token,
+    hash_password,
     now_utc,
     to_unix,
     verify_password,
 )
-from app.core.telegram import verify_telegram_auth
+from app.core.telegram import validate_telegram_auth
 from app.core.types import ErrorCode, Role, UserStatus
 from app.repositories.exceptions import BackendUnavailableError
-from app.repositories.models import RefreshRecord, User
+from app.repositories.models import RefreshRecord, School, SchoolClass, User
 from app.repositories.runtime import get_data_store, get_session_store
 from app.services.audit_service import service as audit
 
@@ -183,10 +185,20 @@ class AuthService:
         return pair
 
     def telegram_login(self, *, auth_data: dict[str, Any], role_hint: str | None, bot_token: str, ip: str | None) -> dict[str, Any]:
-        if not verify_telegram_auth(auth_data, bot_token=bot_token):
+        _ = role_hint
+        if not settings.feature_telegram_onboarding_token_flow_enabled:
+            raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Telegram onboarding flow is disabled")
+        is_valid, reason = validate_telegram_auth(auth_data, bot_token=bot_token, max_age_seconds=86400)
+        if not is_valid:
+            if reason == "expired":
+                raise AppError(
+                    status_code=401,
+                    code=ErrorCode.TELEGRAM_AUTH_EXPIRED.value,
+                    message="Telegram auth data is expired",
+                )
             raise AppError(
                 status_code=401,
-                code=ErrorCode.UNAUTHORIZED.value,
+                code=ErrorCode.TELEGRAM_HASH_INVALID.value,
                 message="Invalid Telegram signature",
             )
 
@@ -206,51 +218,119 @@ class AuthService:
                 "expires_in_seconds": 900,
             }
 
-        if role_hint is None:
-            return {
-                "status": "onboarding_required",
-                "message": "Telegram account is verified; onboarding role is required",
-            }
-
-        role_key = canonical_role(role_hint)
-        try:
-            role = Role(role_key)
-        except ValueError as exc:
-            raise AppError(
-                status_code=400,
-                code=ErrorCode.VALIDATION_ERROR.value,
-                message="Unsupported role",
-                details={"role_hint": role_hint},
-            ) from exc
-
-        new_user_id = f"usr_{uuid.uuid4().hex[:10]}"
-        status = UserStatus.PENDING_APPROVAL if role == Role.TEACHER else UserStatus.ACTIVE
-        new_user = User(
-            id=new_user_id,
-            school_id=None,
-            role=role,
-            full_name=str(auth_data.get("first_name") or "Telegram User"),
-            status=status,
-            telegram_id=telegram_id,
-            email=None,
-            password_hash=None,
-        )
-        self._save_user(new_user)
-
-        if status == UserStatus.PENDING_APPROVAL:
-            audit.record(event="auth.telegram.pending_approval", user_id=new_user.id, school_id=None, ip=ip)
-            return {
-                "status": "pending_approval",
-                "message": "Account created and awaiting school admin approval",
-            }
-
-        pair = self._issue_token_pair(new_user)
-        audit.record(event="auth.telegram.login.success", user_id=new_user.id, school_id=new_user.school_id, ip=ip)
-        return {
-            "access_token": pair.access_token,
-            "refresh_token": pair.refresh_token,
-            "expires_in_seconds": 900,
+        onboarding_token = f"onb_{uuid.uuid4().hex}"
+        payload = {
+            "telegram_id": telegram_id,
+            "first_name": str(auth_data.get("first_name") or "Telegram User"),
+            "username": auth_data.get("username"),
+            "auth_date": int(auth_data.get("auth_date") or 0),
         }
+        try:
+            get_session_store().save_onboarding_token(
+                onboarding_token,
+                payload,
+                ttl_seconds=int(ONBOARDING_TOKEN_TTL.total_seconds()),
+            )
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+        audit.record(event="auth.telegram.onboarding_token.issued", user_id=None, school_id=None, ip=ip, details={"telegram_id": telegram_id})
+        return {
+            "status": "onboarding_required",
+            "telegram_id": telegram_id,
+            "onboarding_token": onboarding_token,
+            "expires_in_seconds": int(ONBOARDING_TOKEN_TTL.total_seconds()),
+        }
+
+    def register_teacher(
+        self,
+        *,
+        full_name: str,
+        email: str,
+        password: str,
+        subject: str,
+        school_id: str | None,
+        school_name: str | None,
+        onboarding_token: str | None,
+        ip: str | None,
+    ) -> tuple[User, TokenPair]:
+        if onboarding_token and not settings.feature_telegram_onboarding_token_flow_enabled:
+            raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Telegram onboarding flow is disabled")
+        identity = email.lower().strip()
+        if self._find_user_by_email(identity):
+            raise AppError(status_code=409, code=ErrorCode.VALIDATION_ERROR.value, message="Email already in use")
+
+        onboarding_payload: dict[str, Any] | None = None
+        if onboarding_token:
+            try:
+                onboarding_payload = get_session_store().pop_onboarding_token(onboarding_token)
+            except BackendUnavailableError as exc:
+                raise _service_unavailable() from exc
+            if not onboarding_payload:
+                raise AppError(
+                    status_code=400,
+                    code=ErrorCode.ONBOARDING_TOKEN_INVALID.value,
+                    message="Onboarding token is invalid or expired",
+                )
+
+        try:
+            data_store = get_data_store()
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+
+        resolved_school_id = school_id
+        if resolved_school_id:
+            school = data_store.get_school_by_id(resolved_school_id)
+            if not school:
+                raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="School not found")
+        else:
+            if not school_name:
+                raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="School name is required for new school")
+            resolved_school_id = f"school_{uuid.uuid4().hex[:8]}"
+            data_store.save_school(School(id=resolved_school_id, name=school_name, subscription_plan="freemium"))
+
+        telegram_id = int(onboarding_payload["telegram_id"]) if onboarding_payload and onboarding_payload.get("telegram_id") else None
+        if telegram_id is not None and self._find_user_by_telegram_id(telegram_id):
+            raise AppError(status_code=409, code=ErrorCode.VALIDATION_ERROR.value, message="Telegram account already linked")
+
+        user = User(
+            id=f"usr_{uuid.uuid4().hex[:10]}",
+            school_id=resolved_school_id,
+            role=Role.TEACHER,
+            full_name=full_name,
+            status=UserStatus.ACTIVE,
+            email=identity,
+            password_hash=hash_password(password),
+            telegram_id=telegram_id,
+        )
+        data_store.save_user(user)
+
+        # Bootstrap teacher default class/assignment so the teacher can start immediately.
+        class_id = f"cls_{uuid.uuid4().hex[:8]}"
+        data_store.save_class(
+            SchoolClass(
+                id=class_id,
+                school_id=resolved_school_id,
+                teacher_id=user.id,
+                name="Default",
+            )
+        )
+        data_store.save_teacher_subject(teacher_id=user.id, school_id=resolved_school_id, subject_code=subject)
+        data_store.save_teacher_class_assignment(
+            teacher_id=user.id,
+            school_id=resolved_school_id,
+            class_id=class_id,
+            subject_code=subject,
+        )
+
+        pair = self._issue_token_pair(user)
+        audit.record(
+            event="auth.register.teacher.success",
+            user_id=user.id,
+            school_id=user.school_id,
+            ip=ip,
+            details={"onboarding_token_used": bool(onboarding_token)},
+        )
+        return user, pair
 
     def refresh(self, *, refresh_token: str, ip: str | None) -> TokenPair:
         token_hash = hash_refresh_token(refresh_token)
@@ -356,6 +436,16 @@ class AuthService:
 
         if telegram_id is not None and self._find_user_by_telegram_id(telegram_id):
             raise AppError(status_code=409, code=ErrorCode.VALIDATION_ERROR.value, message="Telegram account already linked")
+
+        teacher = data.get_user_by_id(invite.teacher_id)
+        if teacher and teacher.role == Role.TEACHER:
+            teacher_students_count = data.count_students_for_teacher(invite.teacher_id)
+            if teacher_students_count >= FREEMIUM_STUDENT_LIMIT_PER_TEACHER:
+                raise AppError(
+                    status_code=403,
+                    code=ErrorCode.CLASS_LIMIT_REACHED.value,
+                    message="Class student limit reached for freemium teacher",
+                )
 
         new_user_id = f"usr_{uuid.uuid4().hex[:10]}"
         new_student = User(

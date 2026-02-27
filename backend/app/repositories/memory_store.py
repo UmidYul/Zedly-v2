@@ -1,11 +1,26 @@
 from __future__ import annotations
 
+import secrets
 from datetime import timedelta
 
 from app.core.constants import INVITE_TTL_HOURS
 from app.core.security import hash_password
 from app.core.types import Role, UserStatus
-from app.repositories.models import InviteCode, RefreshRecord, School, SchoolClass, TestResource, User, now_utc
+from app.repositories.models import (
+    AnalyticsSnapshot,
+    InviteCode,
+    RefreshRecord,
+    School,
+    SchoolClass,
+    SessionAnswer,
+    TestAnswerOption,
+    TestAssignment,
+    TestQuestion,
+    TestResource,
+    TestSessionResource,
+    User,
+    now_utc,
+)
 
 
 class InMemoryStore:
@@ -17,9 +32,17 @@ class InMemoryStore:
 
         self.users: dict[str, User] = {}
         self.tests: dict[str, TestResource] = {}
+        self.test_assignments: dict[str, TestAssignment] = {}
+        self.test_sessions: dict[str, TestSessionResource] = {}
+        self.session_answers: dict[str, dict[str, SessionAnswer]] = {}
+        self.analytics_snapshots: dict[str, AnalyticsSnapshot] = {}
+        self.teacher_subjects: dict[str, set[str]] = {}
+        self.teacher_class_assignments: dict[str, set[tuple[str, str]]] = {}
+        self.student_class_enrollments: dict[str, str] = {}
         self.classes: dict[str, SchoolClass] = {}
         self.class_students: dict[str, set[str]] = {}
         self.invite_codes: dict[str, InviteCode] = {}
+        self.onboarding_tokens: dict[str, dict] = {}
 
         self.refresh_tokens: dict[str, RefreshRecord] = {}
         self.refresh_family_index: dict[str, set[str]] = {}
@@ -35,6 +58,7 @@ class InMemoryStore:
         self.security_alerts: list = []
         self.cross_school_attempts: dict[str, list[int]] = {}
         self.blocked_ips: dict[str, int] = {}
+        self.event_streams: dict[str, list[tuple[str, dict]]] = {}
 
         self._seed()
 
@@ -120,13 +144,41 @@ class InMemoryStore:
             school_id="school_A",
             teacher_id="usr_teacher_A",
             title="Physics School A",
+            subject="physics",
+            status="published",
+            questions=[
+                TestQuestion(
+                    question_id="q_A_1",
+                    text="Speed unit?",
+                    topic="kinematics",
+                    answers=[
+                        TestAnswerOption(answer_id="a_A_1", text="m/s", is_correct=True),
+                        TestAnswerOption(answer_id="a_A_2", text="kg"),
+                    ],
+                ),
+                TestQuestion(
+                    question_id="q_A_2",
+                    text="Force formula?",
+                    topic="dynamics",
+                    answers=[
+                        TestAnswerOption(answer_id="a_A_3", text="F=ma", is_correct=True),
+                        TestAnswerOption(answer_id="a_A_4", text="E=mc2"),
+                    ],
+                ),
+            ],
         )
         self.tests["tst_B_1"] = TestResource(
             id="tst_B_1",
             school_id="school_B",
             teacher_id="usr_teacher_B",
             title="Physics School B",
+            subject="physics",
         )
+        self.teacher_subjects["usr_teacher_A"] = {"physics", "mathematics"}
+        self.teacher_subjects["usr_teacher_B"] = {"physics"}
+        self.teacher_class_assignments["usr_teacher_A"] = {("cls_A_7A", "physics"), ("cls_A_7A", "mathematics")}
+        self.teacher_class_assignments["usr_teacher_B"] = {("cls_B_8A", "physics")}
+        self.student_class_enrollments["usr_student_A"] = "cls_A_7A"
 
     def reset(self) -> None:
         self.__init__()

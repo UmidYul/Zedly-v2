@@ -43,4 +43,6 @@ class TelegramPendingApprovalResponse(BaseModel):
 
 class TelegramOnboardingRequiredResponse(BaseModel):
     status: str = "onboarding_required"
-    message: str
+    telegram_id: int
+    onboarding_token: str
+    expires_in_seconds: int

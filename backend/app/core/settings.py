@@ -27,6 +27,9 @@ class Settings:
     security_alert_threshold_per_5m: int
     security_ip_block_seconds: int
     debug_sql: bool
+    feature_offline_enabled: bool
+    feature_analytics_snapshots_enabled: bool
+    feature_telegram_onboarding_token_flow_enabled: bool
 
 
 def load_settings() -> Settings:
@@ -41,6 +44,11 @@ def load_settings() -> Settings:
         security_alert_threshold_per_5m=int(os.getenv("ZEDLY_SECURITY_ALERT_THRESHOLD_PER_5M", "10")),
         security_ip_block_seconds=int(os.getenv("ZEDLY_SECURITY_IP_BLOCK_SECONDS", "86400")),
         debug_sql=_to_bool(os.getenv("ZEDLY_DEBUG_SQL"), default=False),
+        feature_offline_enabled=_to_bool(os.getenv("ZEDLY_FEATURE_OFFLINE_ENABLED"), default=True),
+        feature_analytics_snapshots_enabled=_to_bool(os.getenv("ZEDLY_FEATURE_ANALYTICS_SNAPSHOTS_ENABLED"), default=True),
+        feature_telegram_onboarding_token_flow_enabled=_to_bool(
+            os.getenv("ZEDLY_FEATURE_TELEGRAM_ONBOARDING_TOKEN_FLOW_ENABLED"), default=True
+        ),
     )
 
 

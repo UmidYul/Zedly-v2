@@ -3,7 +3,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
+from app.api.routes.analytics import router as analytics_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.tests import router as tests_router
 from app.api.routes.users import router as users_router
 from app.core.errors import AppError, app_error_handler, unhandled_error_handler, validation_error_handler
 from app.db.request_context import RequestRlsContext, reset_request_rls_context, set_request_rls_context
@@ -27,6 +29,8 @@ async def request_rls_context_middleware(request, call_next):
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(tests_router)
+app.include_router(analytics_router)
 
 
 @app.get("/health")

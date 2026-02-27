@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -95,6 +96,22 @@ class SessionStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def save_onboarding_token(self, token: str, payload: dict, ttl_seconds: int) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def pop_onboarding_token(self, token: str) -> dict | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def publish_event(self, stream: str, event_type: str, payload: dict) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def read_events(self, stream: str, start_id: str, *, count: int = 100, block_ms: int = 0) -> list[tuple[str, dict]]:
+        raise NotImplementedError
+
+    @abstractmethod
     def reset(self) -> None:
         raise NotImplementedError
 
@@ -169,6 +186,42 @@ class InMemorySessionStore(SessionStore):
 
     def list_user_tokens(self, user_id: str) -> list[str]:
         return list(store.refresh_user_index.get(user_id, set()))
+
+    def save_onboarding_token(self, token: str, payload: dict, ttl_seconds: int) -> None:
+        expires_at = int(time.time()) + ttl_seconds
+        value = dict(payload)
+        value["_expires_at"] = expires_at
+        store.onboarding_tokens[token] = value
+
+    def pop_onboarding_token(self, token: str) -> dict | None:
+        record = store.onboarding_tokens.pop(token, None)
+        if not record:
+            return None
+        expires_at = int(record.get("_expires_at", 0))
+        if expires_at and expires_at <= int(time.time()):
+            return None
+        record.pop("_expires_at", None)
+        return record
+
+    def publish_event(self, stream: str, event_type: str, payload: dict) -> str:
+        entries = store.event_streams.setdefault(stream, [])
+        event_id = f"{int(time.time() * 1000)}-{len(entries)}"
+        data = {"type": event_type, **payload}
+        entries.append((event_id, data))
+        return event_id
+
+    def read_events(self, stream: str, start_id: str, *, count: int = 100, block_ms: int = 0) -> list[tuple[str, dict]]:
+        _ = block_ms
+        entries = store.event_streams.get(stream, [])
+        if start_id == "$":
+            return entries[-count:]
+        result: list[tuple[str, dict]] = []
+        for entry_id, payload in entries:
+            if entry_id > start_id:
+                result.append((entry_id, payload))
+            if len(result) >= count:
+                break
+        return result
 
     def reset(self) -> None:
         return None
@@ -353,6 +406,46 @@ class RedisSessionStore(SessionStore):
 
     def list_user_tokens(self, user_id: str) -> list[str]:
         return list(self._safe(lambda: self.client.smembers(self._user_sessions_key(user_id))))
+
+    def _onboarding_key(self, token: str) -> str:
+        return f"onboarding:{token}"
+
+    def save_onboarding_token(self, token: str, payload: dict, ttl_seconds: int) -> None:
+        ttl = max(ttl_seconds, 1)
+        self._safe(lambda: self.client.setex(self._onboarding_key(token), ttl, json.dumps(payload)))
+
+    def pop_onboarding_token(self, token: str) -> dict | None:
+        def _impl():
+            key = self._onboarding_key(token)
+            with self.client.pipeline() as pipe:
+                pipe.get(key)
+                pipe.delete(key)
+                values = pipe.execute()
+            raw = values[0]
+            if not raw:
+                return None
+            return json.loads(raw)
+
+        return self._safe(_impl)
+
+    def publish_event(self, stream: str, event_type: str, payload: dict) -> str:
+        data = {"type": event_type, "payload": json.dumps(payload)}
+        return str(self._safe(lambda: self.client.xadd(stream, data)))
+
+    def read_events(self, stream: str, start_id: str, *, count: int = 100, block_ms: int = 0) -> list[tuple[str, dict]]:
+        def _impl():
+            events = self.client.xread({stream: start_id}, count=count, block=block_ms if block_ms > 0 else None)
+            output: list[tuple[str, dict]] = []
+            for _, stream_events in events:
+                for event_id, event_data in stream_events:
+                    payload = {}
+                    if "payload" in event_data:
+                        payload = json.loads(event_data["payload"])
+                    item = {"type": event_data.get("type"), **payload}
+                    output.append((str(event_id), item))
+            return output
+
+        return list(self._safe(_impl))
 
     def reset(self) -> None:
         # Integration environment should isolate DB index per app; flushdb is acceptable for tests only.

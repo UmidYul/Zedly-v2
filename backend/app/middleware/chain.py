@@ -123,7 +123,7 @@ def enforce_school_scope(*, auth: AuthContext, target_school_id: str | None, res
         resource_id=resource_id,
         ip=get_client_ip(request),
     )
-    raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="Resource not found")
+    raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Cross-school access denied")
 
 
 def require_permission(permission_key: str):
@@ -158,14 +158,19 @@ def enforce_feature(feature_code: str, auth: AuthContext) -> None:
         )
 
 
-def enforce_assignment_scope(*, auth: AuthContext, class_id: str | None) -> None:
+def enforce_assignment_scope(*, auth: AuthContext, class_id: str | None, subject: str | None = None) -> None:
     if auth.user.role != Role.TEACHER or not class_id:
         return
     try:
-        school_class = get_data_store().get_class_by_id(class_id)
+        data_store = get_data_store()
+        has_assignment = data_store.has_teacher_class_assignment(
+            teacher_id=auth.user.id,
+            class_id=class_id,
+            subject=subject,
+        )
     except BackendUnavailableError as exc:
         raise _service_unavailable() from exc
-    if school_class and school_class.teacher_id != auth.user.id:
+    if not has_assignment:
         raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Class assignment required")
 
 

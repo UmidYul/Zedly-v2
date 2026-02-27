@@ -36,6 +36,31 @@ class ClassInviteResponse(BaseModel):
     expires_at: str
 
 
+class RegisterSchoolPayload(BaseModel):
+    school_id: str | None = None
+    name: str | None = None
+
+
+class RegisterUserRequest(BaseModel):
+    role: str = "teacher"
+    full_name: str
+    email: str
+    password: str
+    subject: str = "general"
+    school: RegisterSchoolPayload = Field(default_factory=RegisterSchoolPayload)
+    onboarding_token: str | None = None
+
+
+class RegisterUserResponse(BaseModel):
+    user_id: str
+    role: str
+    school_id: str | None
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in_seconds: int = 900
+
+
 class TestCreateRequest(BaseModel):
     title: str
     mode: str = "standard"

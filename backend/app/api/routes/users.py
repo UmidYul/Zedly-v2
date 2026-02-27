@@ -2,27 +2,54 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 
+from app.core.errors import AppError
 from app.middleware.chain import (
     AuthContext,
     audit_trail,
     authenticate,
     enforce_assignment_scope,
-    enforce_feature,
     enforce_school_scope,
     require_permission,
 )
+from app.core.types import ErrorCode
 from app.schemas.users import (
     ClassInviteResponse,
     PatchMeRequest,
+    RegisterUserRequest,
+    RegisterUserResponse,
     SchoolUsersResponse,
-    TestCreateRequest,
-    TestCreateResponse,
     UserResponse,
 )
+from app.services.auth_service import service as auth_service
 from app.services.users_service import service as users_service
 
 
 router = APIRouter(tags=["users"])
+
+
+@router.post("/users/register", response_model=RegisterUserResponse, status_code=201)
+def register_user(payload: RegisterUserRequest, request: Request) -> RegisterUserResponse:
+    if payload.role != "teacher":
+        raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="Only teacher registration is supported")
+    user, pair = auth_service.register_teacher(
+        full_name=payload.full_name,
+        email=payload.email,
+        password=payload.password,
+        subject=payload.subject,
+        school_id=payload.school.school_id,
+        school_name=payload.school.name,
+        onboarding_token=payload.onboarding_token,
+        ip=request.client.host if request.client else None,
+    )
+    return RegisterUserResponse(
+        user_id=user.id,
+        role=user.role.value,
+        school_id=user.school_id,
+        access_token=pair.access_token,
+        refresh_token=pair.refresh_token,
+        token_type="bearer",
+        expires_in_seconds=900,
+    )
 
 
 @router.get("/users/me", response_model=UserResponse)
@@ -99,24 +126,4 @@ def invite_class(
         class_id=class_id,
         code=school_class.code,
         expires_at=school_class.expires_at.isoformat(),
-    )
-
-
-@router.post("/tests", response_model=TestCreateResponse)
-def create_test(
-    payload: TestCreateRequest,
-    request: Request,
-    auth: AuthContext = Depends(require_permission("create_test")),
-) -> TestCreateResponse:
-    # Cross-school body field is intentionally ignored; source of truth is JWT school_id.
-    test = users_service.create_test(current_user=auth.user, title=payload.title, mode=payload.mode)
-    enforce_school_scope(auth=auth, target_school_id=test.school_id, resource_id=test.id, request=request)
-    audit_trail(event="test.created", auth=auth, resource_id=test.id, request=request)
-    return TestCreateResponse(
-        id=test.id,
-        title=test.title,
-        school_id=test.school_id,
-        teacher_id=test.teacher_id,
-        mode=test.mode,
-        status=test.status,
     )

@@ -6,6 +6,8 @@ from typing import Any
 
 from app.core.types import Role, UserStatus
 
+__test__ = False
+
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -62,8 +64,16 @@ class TestResource:
     school_id: str
     teacher_id: str
     title: str
+    subject: str = "general"
     mode: str = "standard"
     status: str = "draft"
+    show_answers: str = "after_deadline"
+    shuffle_questions: bool = True
+    shuffle_answers: bool = True
+    time_limit_minutes: int = 30
+    allow_retakes: bool = False
+    questions: list["TestQuestion"] = field(default_factory=list)
+    published_at: datetime | None = None
 
 
 @dataclass(slots=True)
@@ -85,3 +95,87 @@ class AuditEvent:
     ip: str | None
     details: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=now_utc)
+
+
+@dataclass(slots=True)
+class TestAnswerOption:
+    answer_id: str
+    text: str
+    is_correct: bool = False
+    explanation: str | None = None
+
+
+@dataclass(slots=True)
+class TestQuestion:
+    question_id: str
+    text: str
+    topic: str
+    points: int = 1
+    answers: list[TestAnswerOption] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class TestAssignment:
+    id: str
+    test_id: str
+    class_id: str
+    school_id: str
+    teacher_id: str
+    deadline: datetime
+    status: str = "assigned"
+
+
+@dataclass(slots=True)
+class SessionAnswer:
+    id: str
+    session_id: str
+    question_id: str
+    answer_id: str | None
+    answered_at: datetime
+    server_answered_at: datetime
+    time_spent_seconds: int | None = None
+    is_late: bool = False
+    source: str = "online"
+    is_correct: bool | None = None
+    points_awarded: int = 0
+
+
+@dataclass(slots=True)
+class TestSessionResource:
+    id: str
+    test_id: str
+    assignment_id: str
+    student_id: str
+    school_id: str
+    mode: str
+    status: str
+    started_at: datetime
+    expires_at: datetime
+    question_order: list[str] = field(default_factory=list)
+    answer_shuffles: dict[str, list[str]] = field(default_factory=dict)
+    completed_at: datetime | None = None
+    score_percent: float | None = None
+    late_submission: bool = False
+
+
+@dataclass(slots=True)
+class AnalyticsSnapshot:
+    id: str
+    school_id: str | None
+    entity_type: str
+    entity_id: str
+    metric_name: str
+    period_type: str
+    period_start: datetime
+    value_json: dict[str, Any]
+    updated_at: datetime = field(default_factory=now_utc)
+
+
+@dataclass(slots=True)
+class OnboardingTokenRecord:
+    token: str
+    telegram_id: int
+    first_name: str
+    username: str | None
+    created_at: datetime
+    expires_at: datetime

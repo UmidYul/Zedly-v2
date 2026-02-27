@@ -2,6 +2,7 @@ from datetime import timedelta
 
 ACCESS_TOKEN_TTL = timedelta(minutes=15)
 REFRESH_TOKEN_TTL = timedelta(days=30)
+ONBOARDING_TOKEN_TTL = timedelta(minutes=30)
 
 JWT_ALGORITHM = "HS256"
 JWT_SECRET = "change-me-in-production-32-bytes-minimum-key"
@@ -12,5 +13,7 @@ LOCKOUT_SECONDS = 3600
 
 INVITE_TTL_HOURS = 72
 FREEMIUM_STUDENT_LIMIT_PER_TEACHER = 30
+MAX_QUESTIONS_PER_TEST = 100
+NTT_TIME_LIMIT_MINUTES = 90
 
 TOKEN_REUSE_ERROR = "TOKEN_REUSE_DETECTED"
