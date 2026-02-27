@@ -123,7 +123,7 @@ ALTER TABLE schools ADD CONSTRAINT chk_schools_plan_dates
 |---|---|---|---|---|
 | `id` | `VARCHAR(50)` | NOT NULL | `'usr_' \|\| nanoid(10)` | PK. Например: `usr_abc123xyz` |
 | `school_id` | `VARCHAR(50)` | NULL | — | FK → `schools.id`. NULL только для `inspector` и `ministry` |
-| `role` | `VARCHAR(20)` | NOT NULL | — | `student` / `teacher` / `director` / `parent` / `inspector` / `ministry` |
+| `role` | `VARCHAR(20)` | NOT NULL | — | `student` / `teacher` / `director` / `psychologist` / `parent` / `inspector` / `ministry` / `superadmin` |
 | `full_name` | `VARCHAR(255)` | NOT NULL | — | ФИО пользователя. Мин. 5, макс. 255 символов |
 | `email` | `VARCHAR(255)` | NULL | — | Email. Уникален глобально (если не NULL) |
 | `email_verified` | `BOOLEAN` | NOT NULL | `FALSE` | Верификация email |
@@ -180,16 +180,16 @@ CREATE UNIQUE INDEX idx_users_telegram_id ON users(telegram_id) WHERE telegram_i
 
 ```sql
 ALTER TABLE users ADD CONSTRAINT chk_users_role
-  CHECK (role IN ('student','teacher','director','parent','inspector','ministry'));
+  CHECK (role IN ('student','teacher','director','psychologist','parent','inspector','ministry','superadmin'));
 
 ALTER TABLE users ADD CONSTRAINT chk_users_status
   CHECK (status IN ('active','inactive','blocked'));
 
 ALTER TABLE users ADD CONSTRAINT chk_users_school_required
   CHECK (
-    (role IN ('student','teacher','director','parent') AND school_id IS NOT NULL)
+    (role IN ('student','teacher','director','psychologist','parent') AND school_id IS NOT NULL)
     OR
-    (role IN ('inspector','ministry') AND school_id IS NULL)
+    (role IN ('inspector','ministry','superadmin') AND school_id IS NULL)
   );
 
 ALTER TABLE users ADD CONSTRAINT chk_users_auth_method
