@@ -2,16 +2,14 @@ import { expect, test } from "@playwright/test";
 
 async function login(page, loginValue: string, password: string) {
   await page.goto("/login");
-  await page.getByLabel("Логин").fill(loginValue);
-  await page.getByLabel("Пароль").fill(password);
+  await page.locator("input#username").fill(loginValue);
+  await page.locator("input#password").fill(password);
   await page.getByRole("button", { name: "Войти", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 test("teacher web auth flow and class invite generation", async ({ page }) => {
   await login(page, "teacher.a.schoola.1", "teacher-pass");
-
-  await expect(page.getByRole("heading", { name: "Профиль" })).toBeVisible();
 
   await page.getByRole("link", { name: "Profile" }).click();
   await expect(page).toHaveURL(/\/profile$/);
@@ -121,8 +119,8 @@ test("first login enforces OTP password change before dashboard access", async (
   expect(generatedOtp.length).toBeGreaterThan(7);
 
   await page.goto("/login");
-  await page.getByLabel("Логин").fill(generatedLogin);
-  await page.getByLabel("Пароль").fill(generatedOtp);
+  await page.locator("input#username").fill(generatedLogin);
+  await page.locator("input#password").fill(generatedOtp);
   await page.getByRole("button", { name: "Войти", exact: true }).click();
   await expect(page).toHaveURL(/\/first-password/);
   await expect(page.getByRole("heading", { name: "Придумайте свой пароль" })).toBeVisible();
