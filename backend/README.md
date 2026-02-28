@@ -62,8 +62,17 @@ ZEDLY_REDIS_URL=redis://localhost:6379/0
 Bootstrap SQL:
 
 ```bash
+export ZEDLY_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/zedly
 python scripts/run_sql_migrations.py
+python scripts/run_sql_migrations.py --check
 ```
+
+Migration discipline:
+- Migration filename format: `NNN_description.sql` (example: `002_add_indexes.sql`).
+- Sequence must be continuous and start from `000`.
+- Applied migrations are tracked in `schema_migrations` with SHA-256 checksum.
+- Applied migration files are immutable (checksum mismatch is a hard error).
+- CI validates sequential apply on a clean PostgreSQL and then runs `--check`.
 
 ## Test
 
