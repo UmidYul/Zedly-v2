@@ -1,16 +1,26 @@
 import { FormEvent, useMemo, useState } from "react";
+import { CheckCircle2, ClipboardList, FileText, GraduationCap, PlayCircle } from "lucide-react";
 import { AppShell } from "../components/layout/AppShell";
+import { Alert } from "../components/ui/Alert";
+import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { EmptyState } from "../components/ui/EmptyState";
+import { Input, Select } from "../components/ui/FormFields";
+import { ProgressBar } from "../components/ui/ProgressBar";
+import { Table, type TableColumn } from "../components/ui/Table";
 import {
   ClassResultsResponse,
   FinishSessionResponse,
   StartSessionResponse,
   sessionsFinish,
-  testsClassResults,
   testsAssign,
+  testsClassResults,
   testsCreate,
   testsGet,
   testsStartSession
 } from "../lib/api";
+import { upsertRecentTest } from "../lib/test-session-storage";
 import { useAuth } from "../state/auth-context";
 
 interface RenderQuestion {
@@ -23,9 +33,25 @@ interface RenderQuestion {
   }>;
 }
 
+function toDeadlineInput(iso: string): string {
+  const date = new Date(iso);
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
+function fromDeadlineInput(value: string): string {
+  if (!value) {
+    return new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  }
+  return new Date(value).toISOString();
+}
+
 export function TestsWorkbenchPage() {
   const { session } = useAuth();
-
   const teacherClasses = useMemo(() => session?.me.teacher_classes || [], [session?.me.teacher_classes]);
 
   const [testTitle, setTestTitle] = useState("Sprint 4 Test");
@@ -35,7 +61,7 @@ export function TestsWorkbenchPage() {
   const [correctAnswerText, setCorrectAnswerText] = useState("4");
   const [wrongAnswerText, setWrongAnswerText] = useState("5");
   const [classId, setClassId] = useState(teacherClasses[0]?.class_id || "cls_A_7A");
-  const [deadline, setDeadline] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString());
+  const [deadlineInput, setDeadlineInput] = useState(toDeadlineInput(new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()));
   const [teacherInfo, setTeacherInfo] = useState<string | null>(null);
   const [teacherError, setTeacherError] = useState<string | null>(null);
   const [isTeacherBusy, setIsTeacherBusy] = useState(false);
@@ -59,7 +85,7 @@ export function TestsWorkbenchPage() {
     return null;
   }
   const accessToken = session.tokens.access_token;
-
+  const currentUserName = session.me.full_name;
   const isTeacher = session.me.role === "teacher";
   const isStudent = session.me.role === "student";
 
@@ -92,9 +118,22 @@ export function TestsWorkbenchPage() {
       };
 
       const created = await testsCreate(accessToken, payload);
-      const assigned = await testsAssign(accessToken, created.id, classId.trim(), deadline);
+      const assigned = await testsAssign(accessToken, created.id, classId.trim(), fromDeadlineInput(deadlineInput));
       const assignment = assigned.assignments_created[0];
       setTeacherInfo(`Создан test_id=${created.id}, assignment_id=${assignment.assignment_id}`);
+      upsertRecentTest({
+        id: `${created.id}_${assignment.assignment_id}`,
+        title: created.title,
+        subject: created.subject,
+        teacher_name: currentUserName,
+        test_id: created.id,
+        assignment_id: assignment.assignment_id,
+        deadline: assignment.deadline,
+        questions_count: created.questions_count,
+        mode: payload.mode,
+        status: "active",
+        progress_answered: 0
+      });
       setStudentTestId(created.id);
       setStudentAssignmentId(assignment.assignment_id);
       setReportTestId(created.id);
@@ -127,11 +166,11 @@ export function TestsWorkbenchPage() {
       } else {
         const test = await testsGet(accessToken, studentTestId.trim());
         setQuestions(
-          test.questions.map((q) => ({
-            question_id: q.question_id,
-            text: q.text,
-            topic: q.topic,
-            answers: q.answers.map((a) => ({ answer_id: a.answer_id, text: a.text }))
+          test.questions.map((question) => ({
+            question_id: question.question_id,
+            text: question.text,
+            topic: question.topic,
+            answers: question.answers.map((answer) => ({ answer_id: answer.answer_id, text: answer.text }))
           }))
         );
       }
@@ -151,9 +190,9 @@ export function TestsWorkbenchPage() {
     setIsStudentBusy(true);
     setStudentError(null);
     try {
-      const finalAnswers = questions.map((q) => ({
-        question_id: q.question_id,
-        answer_id: answersByQuestion[q.question_id] || null,
+      const finalAnswers = questions.map((question) => ({
+        question_id: question.question_id,
+        answer_id: answersByQuestion[question.question_id] || null,
         answered_at: new Date().toISOString()
       }));
       const result = await sessionsFinish(accessToken, sessionState.session_id, finalAnswers);
@@ -187,223 +226,261 @@ export function TestsWorkbenchPage() {
     }
   }
 
+  const classResultColumns: TableColumn<ClassResultsResponse["students"][number]>[] = [
+    { id: "name", header: "Student", sortable: true, accessor: (row) => row.student_name, render: (row) => row.student_name },
+    {
+      id: "status",
+      header: "Status",
+      sortable: true,
+      accessor: (row) => row.status,
+      render: (row) => <Badge variant={row.status === "completed" ? "success" : "warning"}>{row.status}</Badge>
+    },
+    {
+      id: "score",
+      header: "Score %",
+      sortable: true,
+      accessor: (row) => row.score_percent ?? -1,
+      render: (row) => (row.score_percent === null ? "N/A" : `${row.score_percent}%`)
+    },
+    {
+      id: "answered",
+      header: "Answered",
+      sortable: true,
+      accessor: (row) => row.answered_questions,
+      render: (row) => `${row.answered_questions}/${row.total_questions}`
+    },
+    { id: "correct", header: "Correct", sortable: true, accessor: (row) => row.correct_answers, render: (row) => row.correct_answers },
+    {
+      id: "late",
+      header: "Late",
+      sortable: true,
+      accessor: (row) => Number(row.late_submission),
+      render: (row) => (row.late_submission ? "yes" : "no")
+    }
+  ];
+
   return (
     <AppShell>
       <section className="content-stack">
-        <article className="panel-card">
-          <h2>Teacher Test Builder MVP</h2>
-          <p className="panel-note">Create + assign через `/tests` и `/tests/{'{id}'}/assign`.</p>
-          <form className="stack-form" onSubmit={(event) => void onTeacherCreateAssign(event)}>
-            <label className="input-field">
-              <span className="input-label">Title</span>
-              <input value={testTitle} onChange={(event) => setTestTitle(event.target.value)} />
-            </label>
-            <label className="input-field">
-              <span className="input-label">Subject</span>
-              <input value={subject} onChange={(event) => setSubject(event.target.value)} />
-            </label>
-            <label className="input-field">
-              <span className="input-label">Question</span>
-              <input value={questionText} onChange={(event) => setQuestionText(event.target.value)} />
-            </label>
-            <label className="input-field">
-              <span className="input-label">Topic</span>
-              <input value={topic} onChange={(event) => setTopic(event.target.value)} />
-            </label>
-            <label className="input-field">
-              <span className="input-label">Correct answer</span>
-              <input value={correctAnswerText} onChange={(event) => setCorrectAnswerText(event.target.value)} />
-            </label>
-            <label className="input-field">
-              <span className="input-label">Wrong answer</span>
-              <input value={wrongAnswerText} onChange={(event) => setWrongAnswerText(event.target.value)} />
-            </label>
-            {teacherClasses.length ? (
-              <label className="input-field">
-                <span className="input-label">Class</span>
-                <select value={classId} onChange={(event) => setClassId(event.target.value)}>
-                  {teacherClasses.map((item) => (
-                    <option key={item.class_id} value={item.class_id}>
-                      {item.class_name} ({item.class_id})
-                    </option>
+        <Card>
+          <Card.Header>
+            <h2>Tests Workbench</h2>
+          </Card.Header>
+          <Card.Body>
+            <div className="metrics-row">
+              <Badge variant={isTeacher ? "info" : "outline"}>
+                <GraduationCap size={12} /> Teacher Scope
+              </Badge>
+              <Badge variant={isStudent ? "info" : "outline"}>
+                <PlayCircle size={12} /> Student Scope
+              </Badge>
+              <Badge variant="outline">
+                <ClipboardList size={12} /> Results Scope
+              </Badge>
+            </div>
+          </Card.Body>
+        </Card>
+
+        <section className="panel-grid workbench-grid">
+          <Card>
+            <Card.Header>
+              <h3>
+                <FileText size={16} /> Teacher Test Builder MVP
+              </h3>
+            </Card.Header>
+            <Card.Body className="content-stack">
+              <form className="stack-form" onSubmit={(event) => void onTeacherCreateAssign(event)}>
+                <Input label="Title" value={testTitle} onChange={(event) => setTestTitle(event.target.value)} />
+                <Input label="Subject" value={subject} onChange={(event) => setSubject(event.target.value)} />
+                <Input label="Question" value={questionText} onChange={(event) => setQuestionText(event.target.value)} />
+                <Input label="Topic" value={topic} onChange={(event) => setTopic(event.target.value)} />
+                <Input label="Correct answer" value={correctAnswerText} onChange={(event) => setCorrectAnswerText(event.target.value)} />
+                <Input label="Wrong answer" value={wrongAnswerText} onChange={(event) => setWrongAnswerText(event.target.value)} />
+                {teacherClasses.length ? (
+                  <Select
+                    label="Class"
+                    value={classId}
+                    onChange={(event) => setClassId(event.target.value)}
+                    options={teacherClasses.map((item) => ({
+                      value: item.class_id,
+                      label: `${item.class_name} (${item.class_id})`
+                    }))}
+                  />
+                ) : null}
+                <Input label="Class ID" value={classId} onChange={(event) => setClassId(event.target.value)} />
+                <Input
+                  label="Deadline (ISO)"
+                  type="datetime-local"
+                  value={deadlineInput}
+                  onChange={(event) => setDeadlineInput(event.target.value)}
+                />
+                {teacherError ? <Alert variant="danger" title={teacherError} /> : null}
+                {teacherInfo ? <Alert variant="success" title={teacherInfo} /> : null}
+                <Button type="submit" loading={isTeacherBusy} disabled={!isTeacher}>
+                  {isTeacherBusy ? "Создание..." : "Create + Assign"}
+                </Button>
+              </form>
+            </Card.Body>
+          </Card>
+
+          <Card>
+            <Card.Header>
+              <h3>
+                <PlayCircle size={16} /> Student Test Screen + Result
+              </h3>
+            </Card.Header>
+            <Card.Body className="content-stack">
+              <form className="stack-form" onSubmit={(event) => void onStudentStart(event)}>
+                <Input label="Test ID" value={studentTestId} onChange={(event) => setStudentTestId(event.target.value)} />
+                <Input label="Assignment ID" value={studentAssignmentId} onChange={(event) => setStudentAssignmentId(event.target.value)} />
+                {studentError ? <Alert variant="danger" title={studentError} /> : null}
+                <Button type="submit" loading={isStudentBusy} disabled={!isStudent}>
+                  {isStudentBusy ? "Старт..." : "Start Session"}
+                </Button>
+              </form>
+
+              {questions.length ? (
+                <section className="content-stack">
+                  {questions.map((question) => (
+                    <Card key={question.question_id} variant="flat">
+                      <Card.Body className="content-stack">
+                        <h3>{question.text}</h3>
+                        <p className="panel-note">Topic: {question.topic}</p>
+                        {question.answers.map((answer) => (
+                          <label key={answer.answer_id} className="session-answer-item">
+                            <input
+                              type="radio"
+                              name={`question_${question.question_id}`}
+                              checked={answersByQuestion[question.question_id] === answer.answer_id}
+                              onChange={() =>
+                                setAnswersByQuestion((prev) => ({
+                                  ...prev,
+                                  [question.question_id]: answer.answer_id
+                                }))
+                              }
+                            />
+                            <span>{answer.text}</span>
+                          </label>
+                        ))}
+                      </Card.Body>
+                    </Card>
                   ))}
-                </select>
-              </label>
-            ) : null}
-            <label className="input-field">
-              <span className="input-label">Class ID</span>
-              <input value={classId} onChange={(event) => setClassId(event.target.value)} />
-            </label>
-            <label className="input-field">
-              <span className="input-label">Deadline (ISO)</span>
-              <input value={deadline} onChange={(event) => setDeadline(event.target.value)} />
-            </label>
-            {teacherError ? <div className="error-box">{teacherError}</div> : null}
-            {teacherInfo ? <div className="success-box">{teacherInfo}</div> : null}
-            <button type="submit" className="primary-button" disabled={isTeacherBusy || !isTeacher}>
-              {isTeacherBusy ? "Создание..." : "Create + Assign"}
-            </button>
-          </form>
-        </article>
+                  <Button variant="secondary" onClick={() => void onStudentFinish()} loading={isStudentBusy} disabled={!isStudent}>
+                    {isStudentBusy ? "Завершение..." : "Finish Session"}
+                  </Button>
+                </section>
+              ) : (
+                <EmptyState title="Session not started" description="Введите test/assignment и нажмите Start Session." />
+              )}
 
-        <article className="panel-card">
-          <h2>Student Test Screen + Result</h2>
-          <p className="panel-note">Start session, choose answers, finish и получить результат с breakdown.</p>
-          <form className="stack-form" onSubmit={(event) => void onStudentStart(event)}>
-            <label className="input-field">
-              <span className="input-label">Test ID</span>
-              <input value={studentTestId} onChange={(event) => setStudentTestId(event.target.value)} />
-            </label>
-            <label className="input-field">
-              <span className="input-label">Assignment ID</span>
-              <input value={studentAssignmentId} onChange={(event) => setStudentAssignmentId(event.target.value)} />
-            </label>
-            {studentError ? <div className="error-box">{studentError}</div> : null}
-            <button type="submit" className="primary-button" disabled={isStudentBusy || !isStudent}>
-              {isStudentBusy ? "Старт..." : "Start Session"}
-            </button>
-          </form>
-
-          {questions.length ? (
-            <div className="content-stack" style={{ marginTop: 14 }}>
-              {questions.map((q) => (
-                <article key={q.question_id} className="panel-card">
-                  <h3>{q.text}</h3>
-                  <p className="panel-note">Topic: {q.topic}</p>
-                  <div className="stack-form">
-                    {q.answers.map((a) => (
-                      <label key={a.answer_id} className="input-field">
-                        <span className="input-label">
-                          <input
-                            type="radio"
-                            name={`question_${q.question_id}`}
-                            checked={answersByQuestion[q.question_id] === a.answer_id}
-                            onChange={() =>
-                              setAnswersByQuestion((prev) => ({
-                                ...prev,
-                                [q.question_id]: a.answer_id
-                              }))
-                            }
-                          />{" "}
-                          {a.text}
-                        </span>
-                      </label>
+              {finishResult ? (
+                <Card variant="flat">
+                  <Card.Header>
+                    <h3>Result Screen</h3>
+                  </Card.Header>
+                  <Card.Body className="content-stack">
+                    <div className="metrics-row">
+                      <span>Status: {finishResult.status}</span>
+                      <span>Score: {finishResult.score_percent ?? "N/A"}%</span>
+                      <span>
+                        Answered: {finishResult.answered_questions}/{finishResult.total_questions}
+                      </span>
+                      <span>Correct: {finishResult.correct_answers}</span>
+                    </div>
+                    {finishResult.topic_breakdown.map((topicItem) => (
+                      <div key={topicItem.topic} className="result-topic-row">
+                        <strong>{topicItem.topic}</strong>
+                        <ProgressBar value={topicItem.score_percent} labeled />
+                      </div>
                     ))}
-                  </div>
-                </article>
-              ))}
-              <button type="button" className="secondary-button" onClick={() => void onStudentFinish()} disabled={isStudentBusy || !isStudent}>
-                {isStudentBusy ? "Завершение..." : "Finish Session"}
-              </button>
-            </div>
-          ) : null}
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Topic</th>
+                            <th>Total</th>
+                            <th>Answered</th>
+                            <th>Correct</th>
+                            <th>Score %</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {finishResult.topic_breakdown.map((topicItem) => (
+                            <tr key={`tbl_${topicItem.topic}`}>
+                              <td>{topicItem.topic}</td>
+                              <td>{topicItem.total_questions}</td>
+                              <td>{topicItem.answered_questions}</td>
+                              <td>{topicItem.correct_answers}</td>
+                              <td>{topicItem.score_percent}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card.Body>
+                </Card>
+              ) : null}
+            </Card.Body>
+          </Card>
+        </section>
 
-          {finishResult ? (
-            <article className="panel-card" style={{ marginTop: 14 }}>
-              <h3>Result Screen</h3>
-              <dl className="kv-grid">
-                <dt>Status</dt>
-                <dd>{finishResult.status}</dd>
-                <dt>Score %</dt>
-                <dd>{finishResult.score_percent ?? "N/A"}</dd>
-                <dt>Answered</dt>
-                <dd>
-                  {finishResult.answered_questions}/{finishResult.total_questions}
-                </dd>
-                <dt>Correct</dt>
-                <dd>{finishResult.correct_answers}</dd>
-                <dt>Late</dt>
-                <dd>{finishResult.late_submission ? "yes" : "no"}</dd>
-              </dl>
-              <div className="table-wrap" style={{ marginTop: 12 }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Topic</th>
-                      <th>Total</th>
-                      <th>Answered</th>
-                      <th>Correct</th>
-                      <th>Score %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {finishResult.topic_breakdown.map((item) => (
-                      <tr key={item.topic}>
-                        <td>{item.topic}</td>
-                        <td>{item.total_questions}</td>
-                        <td>{item.answered_questions}</td>
-                        <td>{item.correct_answers}</td>
-                        <td>{item.score_percent}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        <Card>
+          <Card.Header>
+            <h3>Class Results</h3>
+          </Card.Header>
+          <Card.Body className="content-stack">
+            <form className="filter-form" onSubmit={(event) => void onLoadClassResults(event)}>
+              <Input label="Test ID" value={reportTestId} onChange={(event) => setReportTestId(event.target.value)} />
+              <Input label="Class ID" value={reportClassId} onChange={(event) => setReportClassId(event.target.value)} />
+              <div className="row-actions">
+                <Button type="submit" variant="ghost" loading={isReportBusy} disabled={!isTeacher}>
+                  {isReportBusy ? "Загрузка..." : "Load Class Results"}
+                </Button>
               </div>
-            </article>
-          ) : null}
-        </article>
+            </form>
 
-        <article className="panel-card">
-          <h2>Class Results</h2>
-          <p className="panel-note">Teacher-scoped list через `/tests/{'{test_id}'}/results?class_id=...`.</p>
-          <form className="stack-form" onSubmit={(event) => void onLoadClassResults(event)}>
-            <label className="input-field">
-              <span className="input-label">Test ID</span>
-              <input value={reportTestId} onChange={(event) => setReportTestId(event.target.value)} />
-            </label>
-            <label className="input-field">
-              <span className="input-label">Class ID</span>
-              <input value={reportClassId} onChange={(event) => setReportClassId(event.target.value)} />
-            </label>
-            {reportError ? <div className="error-box">{reportError}</div> : null}
-            <button type="submit" className="ghost-button" disabled={isReportBusy || !isTeacher}>
-              {isReportBusy ? "Загрузка..." : "Load Class Results"}
-            </button>
-          </form>
+            {reportError ? <Alert variant="danger" title={reportError} /> : null}
 
-          {classResults ? (
-            <div className="content-stack" style={{ marginTop: 12 }}>
-              <dl className="kv-grid">
-                <dt>Total students</dt>
-                <dd>{classResults.total_students}</dd>
-                <dt>Sessions total</dt>
-                <dd>{classResults.sessions_total}</dd>
-                <dt>Completed sessions</dt>
-                <dd>{classResults.completed_sessions}</dd>
-                <dt>Average score</dt>
-                <dd>{classResults.average_score}</dd>
-              </dl>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Student</th>
-                      <th>Status</th>
-                      <th>Score %</th>
-                      <th>Answered</th>
-                      <th>Correct</th>
-                      <th>Late</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {classResults.students.map((item) => (
-                      <tr key={item.student_id}>
-                        <td>{item.student_name}</td>
-                        <td>{item.status}</td>
-                        <td>{item.score_percent ?? "N/A"}</td>
-                        <td>
-                          {item.answered_questions}/{item.total_questions}
-                        </td>
-                        <td>{item.correct_answers}</td>
-                        <td>{item.late_submission ? "yes" : "no"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : null}
-        </article>
+            {classResults ? (
+              <>
+                <section className="panel-grid">
+                  <Card variant="flat">
+                    <Card.Body>
+                      <strong>{classResults.total_students}</strong>
+                      <p className="panel-note">Total students</p>
+                    </Card.Body>
+                  </Card>
+                  <Card variant="flat">
+                    <Card.Body>
+                      <strong>{classResults.sessions_total}</strong>
+                      <p className="panel-note">Sessions total</p>
+                    </Card.Body>
+                  </Card>
+                  <Card variant="flat">
+                    <Card.Body>
+                      <strong>{classResults.completed_sessions}</strong>
+                      <p className="panel-note">Completed sessions</p>
+                    </Card.Body>
+                  </Card>
+                  <Card variant="flat">
+                    <Card.Body>
+                      <strong>{classResults.average_score}%</strong>
+                      <p className="panel-note">Average score</p>
+                    </Card.Body>
+                  </Card>
+                </section>
+                <Table
+                  columns={classResultColumns}
+                  rows={classResults.students}
+                  rowKey={(row) => row.student_id}
+                  emptyTitle="No student rows"
+                />
+              </>
+            ) : (
+              <EmptyState title="Class results are empty" description="Загрузите результаты по test_id и class_id." />
+            )}
+          </Card.Body>
+        </Card>
       </section>
     </AppShell>
   );

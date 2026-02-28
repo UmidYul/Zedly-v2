@@ -26,8 +26,8 @@ services:
     environment:
       ZEDLY_STORAGE_BACKEND: postgres
       ZEDLY_SESSIONS_BACKEND: redis
-      ZEDLY_DATABASE_URL: ${ZEDLY_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zedly}}
-      ZEDLY_REDIS_URL: ${ZEDLY_REDIS_URL:-redis://redis:6379/0}
+      ZEDLY_DATABASE_URL: ${ZEDLY_DATABASE_URL_DOCKER:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zedly}}
+      ZEDLY_REDIS_URL: ${ZEDLY_REDIS_URL_DOCKER:-redis://redis:6379/0}
       ZEDLY_TELEGRAM_BOT_TOKEN: ${ZEDLY_TELEGRAM_BOT_TOKEN:-dev-bot-token}
     ports:
       - "8000:8000"
@@ -45,8 +45,8 @@ services:
     environment:
       ZEDLY_STORAGE_BACKEND: postgres
       ZEDLY_SESSIONS_BACKEND: redis
-      ZEDLY_DATABASE_URL: ${ZEDLY_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zedly}}
-      ZEDLY_REDIS_URL: ${ZEDLY_REDIS_URL:-redis://redis:6379/0}
+      ZEDLY_DATABASE_URL: ${ZEDLY_DATABASE_URL_DOCKER:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zedly}}
+      ZEDLY_REDIS_URL: ${ZEDLY_REDIS_URL_DOCKER:-redis://redis:6379/0}
       ZEDLY_WORKER_POLL_SECONDS: 5
     command: ["python", "worker.py"]
 

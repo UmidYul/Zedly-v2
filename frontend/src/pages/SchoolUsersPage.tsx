@@ -1,216 +1,227 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
-import { MeResponse, SchoolUsersQuery, SchoolUsersResponse, usersListSchoolUsers, usersPatchSchoolUser } from "../lib/api";
+import { Avatar } from "../components/ui/Avatar";
+import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { Input, Select } from "../components/ui/FormFields";
+import { Table, type TableColumn } from "../components/ui/Table";
+import { queryKeys } from "../lib/queryKeys";
+import type { MeResponse, SchoolUsersQuery } from "../lib/api";
+import { usersListSchoolUsers, usersPatchSchoolUser } from "../lib/api";
 import { useAuth } from "../state/auth-context";
-
-const EMPTY_RESULT: SchoolUsersResponse = {
-  school_id: "",
-  users: [],
-  total_in_scope: 0,
-  filtered_total: 0,
-  role: "all",
-  status: "all",
-  class_id: null,
-  search: null
-};
-
-function UserRow({
-  user,
-  canManageStatuses,
-  isMutating,
-  onActivate,
-  onDeactivate
-}: {
-  user: MeResponse;
-  canManageStatuses: boolean;
-  isMutating: boolean;
-  onActivate: (userId: string) => void;
-  onDeactivate: (userId: string) => void;
-}) {
-  const isManageableRole = ["teacher", "student", "psychologist", "parent"].includes(user.role);
-  const canRenderActions = canManageStatuses && isManageableRole;
-
-  return (
-    <tr>
-      <td>{user.full_name}</td>
-      <td>{user.role}</td>
-      <td>{user.status}</td>
-      <td>{user.email || "N/A"}</td>
-      <td>{user.phone || "N/A"}</td>
-      <td>
-        {canRenderActions && user.status !== "active" ? (
-          <button type="button" className="ghost-button table-action" disabled={isMutating} onClick={() => onActivate(user.id)}>
-            Активировать
-          </button>
-        ) : null}
-        {canRenderActions && user.status === "active" ? (
-          <button type="button" className="ghost-button table-action" disabled={isMutating} onClick={() => onDeactivate(user.id)}>
-            Деактивировать
-          </button>
-        ) : null}
-      </td>
-    </tr>
-  );
-}
+import { useToastStore } from "../state/toast-store";
 
 export function SchoolUsersPage() {
   const { session } = useAuth();
+  const queryClient = useQueryClient();
+  const pushToast = useToastStore((state) => state.pushToast);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("all");
   const [search, setSearch] = useState("");
   const [classId, setClassId] = useState("");
-  const [result, setResult] = useState<SchoolUsersResponse>(EMPTY_RESULT);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isMutating, setIsMutating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [submittedFilters, setSubmittedFilters] = useState<SchoolUsersQuery>({
+    role: "all",
+    status: "all"
+  });
 
   const roleOptions = useMemo(() => {
     if (session?.me.role === "teacher") {
-      return ["all", "student"];
+      return [
+        { value: "all", label: "all" },
+        { value: "student", label: "student" }
+      ];
     }
-    return ["all", "student", "teacher", "director", "psychologist", "parent"];
+    return [
+      { value: "all", label: "all" },
+      { value: "student", label: "student" },
+      { value: "teacher", label: "teacher" },
+      { value: "director", label: "director" },
+      { value: "psychologist", label: "psychologist" },
+      { value: "parent", label: "parent" }
+    ];
   }, [session?.me.role]);
 
-  async function loadUsers() {
-    if (!session || !session.me.school_id) {
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await usersListSchoolUsers(session.tokens.access_token, session.me.school_id, {
-        role: role as SchoolUsersQuery["role"],
-        status: status as SchoolUsersQuery["status"],
-        search: search.trim() || undefined,
-        class_id: classId.trim() || undefined
+  const schoolId = session?.me.school_id;
+  const canManageStatuses = session?.me.role === "director";
+
+  const usersQuery = useQuery({
+    queryKey: schoolId ? queryKeys.users.school(schoolId, submittedFilters) : queryKeys.users.all,
+    queryFn: async () => {
+      if (!session || !schoolId) {
+        throw new Error("School is not defined");
+      }
+      return usersListSchoolUsers(session.tokens.access_token, schoolId, submittedFilters);
+    },
+    enabled: Boolean(session && schoolId)
+  });
+
+  const patchStatusMutation = useMutation({
+    mutationFn: async ({ userId, nextStatus }: { userId: string; nextStatus: "active" | "inactive" }) => {
+      if (!session || !schoolId) {
+        throw new Error("School is not defined");
+      }
+      return usersPatchSchoolUser(session.tokens.access_token, schoolId, userId, nextStatus);
+    },
+    onSuccess: (_, payload) => {
+      pushToast({
+        type: "success",
+        title: "Статус обновлён",
+        message: `Пользователь переведён в "${payload.nextStatus}".`
       });
-      setResult(data);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить пользователей.");
-    } finally {
-      setIsLoading(false);
+      if (schoolId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.users.school(schoolId, submittedFilters) });
+      }
     }
-  }
+  });
 
-  useEffect(() => {
-    if (!session?.me.school_id) {
-      return;
-    }
-    void loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.me.school_id]);
+  const users = usersQuery.data?.users || [];
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSuccess(null);
-    void loadUsers();
-  }
+  const columns: TableColumn<MeResponse>[] = useMemo(
+    () => [
+      {
+        id: "name",
+        header: "Пользователь",
+        sortable: true,
+        accessor: (row) => row.full_name,
+        render: (row) => (
+          <div className="user-cell">
+            <Avatar name={row.full_name} src={row.avatar_url} size="md" />
+            <div className="user-cell-meta">
+              <strong>{row.full_name}</strong>
+              <div>{row.login}</div>
+            </div>
+          </div>
+        )
+      },
+      {
+        id: "role",
+        header: "Роль",
+        sortable: true,
+        accessor: (row) => row.role,
+        render: (row) => <Badge variant="outline">{row.role}</Badge>
+      },
+      {
+        id: "email",
+        header: "Email",
+        sortable: true,
+        accessor: (row) => row.email || "",
+        render: (row) => row.email || "N/A"
+      },
+      {
+        id: "status",
+        header: "Статус",
+        sortable: true,
+        accessor: (row) => row.status,
+        render: (row) => {
+          const badgeVariant = row.status === "active" ? "success" : row.status === "inactive" ? "warning" : "default";
+          return <Badge variant={badgeVariant}>{row.status}</Badge>;
+        }
+      },
+      {
+        id: "actions",
+        header: "Действия",
+        render: (row) => {
+          if (!canManageStatuses || !["teacher", "student", "psychologist", "parent"].includes(row.role)) {
+            return "—";
+          }
+          const activate = row.status !== "active";
+          return (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={patchStatusMutation.isPending}
+              onClick={() =>
+                patchStatusMutation.mutate({
+                  userId: row.id,
+                  nextStatus: activate ? "active" : "inactive"
+                })
+              }
+            >
+              {activate ? "Активировать" : "Деактивировать"}
+            </Button>
+          );
+        }
+      }
+    ],
+    [canManageStatuses, patchStatusMutation]
+  );
 
-  async function updateStatus(userId: string, statusValue: "active" | "inactive") {
-    if (!session || !session.me.school_id) {
-      return;
-    }
-    setIsMutating(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      await usersPatchSchoolUser(session.tokens.access_token, session.me.school_id, userId, statusValue);
-      setSuccess(`Статус пользователя обновлён: ${statusValue}.`);
-      await loadUsers();
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось изменить статус пользователя.");
-    } finally {
-      setIsMutating(false);
-    }
+  function applyFilters() {
+    setSubmittedFilters({
+      role: role as SchoolUsersQuery["role"],
+      status: status as SchoolUsersQuery["status"],
+      search: search.trim() || undefined,
+      class_id: classId.trim() || undefined
+    });
+    setSelectedRowKeys([]);
   }
 
   return (
     <AppShell>
       <section className="content-stack">
-        <article className="panel-card">
-          <h2>Пользователи школы</h2>
-          <p className="panel-note">Role-aware выборка: учитель видит только учеников своих классов.</p>
-          <form className="filter-form" onSubmit={onSubmit}>
-            <label className="input-field">
-              <span className="input-label">Роль</span>
-              <select value={role} onChange={(event) => setRole(event.target.value)}>
-                {roleOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="input-field">
-              <span className="input-label">Статус</span>
-              <select value={status} onChange={(event) => setStatus(event.target.value)}>
-                <option value="all">all</option>
-                <option value="active">active</option>
-                <option value="inactive">inactive</option>
-                <option value="pending_approval">pending_approval</option>
-              </select>
-            </label>
-            <label className="input-field">
-              <span className="input-label">Поиск (ФИО)</span>
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Teacher / Student" />
-            </label>
-            <label className="input-field">
-              <span className="input-label">Class ID (опционально)</span>
-              <input value={classId} onChange={(event) => setClassId(event.target.value)} placeholder="cls_A_7A" />
-            </label>
-            <button type="submit" className="primary-button" disabled={isLoading}>
-              {isLoading ? "Загрузка..." : "Применить фильтры"}
-            </button>
-          </form>
-          {error ? <div className="error-box">{error}</div> : null}
-          {success ? <div className="success-box">{success}</div> : null}
-          <div className="metrics-row">
-            <span>School: {result.school_id || session?.me.school_id || "N/A"}</span>
-            <span>Total in scope: {result.total_in_scope}</span>
-            <span>Filtered: {result.filtered_total}</span>
-          </div>
-        </article>
+        <Card>
+          <Card.Header>
+            <h2>Управление пользователями</h2>
+          </Card.Header>
+          <Card.Body className="content-stack">
+            <section className="filter-form">
+              <Select label="Роль" value={role} onChange={(event) => setRole(event.target.value)} options={roleOptions} />
+              <Select
+                label="Статус"
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+                options={[
+                  { value: "all", label: "all" },
+                  { value: "active", label: "active" },
+                  { value: "inactive", label: "inactive" },
+                  { value: "pending_approval", label: "pending_approval" }
+                ]}
+              />
+              <Input label="Поиск" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="name/email" />
+              <Input label="Класс" value={classId} onChange={(event) => setClassId(event.target.value)} placeholder="cls_A_7A" />
+            </section>
 
-        <article className="panel-card table-panel">
-          <h2>Список</h2>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Имя</th>
-                  <th>Роль</th>
-                  <th>Статус</th>
-                  <th>Email</th>
-                  <th>Телефон</th>
-                  <th>Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.users.length ? (
-                  result.users.map((user) => (
-                    <UserRow
-                      key={user.id}
-                      user={user}
-                      canManageStatuses={session?.me.role === "director"}
-                      isMutating={isMutating}
-                      onActivate={(userId) => {
-                        void updateStatus(userId, "active");
-                      }}
-                      onDeactivate={(userId) => {
-                        void updateStatus(userId, "inactive");
-                      }}
-                    />
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6}>Нет данных по текущему фильтру.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </article>
+            <div className="row-actions">
+              <Button onClick={applyFilters} loading={usersQuery.isFetching}>
+                Применить фильтры
+              </Button>
+              {selectedRowKeys.length ? (
+                <>
+                  <Badge variant="info" size="md">
+                    Выбрано: {selectedRowKeys.length}
+                  </Badge>
+                  <Button variant="secondary" size="sm">
+                    Экспорт
+                  </Button>
+                </>
+              ) : null}
+            </div>
+
+            <div className="metrics-row">
+              <span>School: {usersQuery.data?.school_id || schoolId || "N/A"}</span>
+              <span>Total in scope: {usersQuery.data?.total_in_scope || 0}</span>
+              <span>Filtered: {usersQuery.data?.filtered_total || 0}</span>
+            </div>
+          </Card.Body>
+        </Card>
+
+        <Card className="table-panel">
+          <Table
+            columns={columns}
+            rows={users}
+            rowKey={(row) => row.id}
+            loading={usersQuery.isLoading || usersQuery.isFetching}
+            enableSelection
+            selectedRowKeys={selectedRowKeys}
+            onSelectedRowKeysChange={setSelectedRowKeys}
+            emptyTitle="Пользователи не найдены"
+            emptyDescription="Проверьте фильтры или измените параметры поиска."
+          />
+        </Card>
       </section>
     </AppShell>
   );
