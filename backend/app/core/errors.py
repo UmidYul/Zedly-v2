@@ -18,10 +18,11 @@ class AppError(Exception):
 
 def error_payload(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {
+        "ok": False,
         "error": {
             "code": code,
             "message": message,
-        }
+        },
     }
     if details:
         payload["error"]["details"] = details
