@@ -4,8 +4,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
+import { ThemeToggleButton } from "../ui/ThemeToggleButton";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { useAuth } from "../../state/auth-context";
+import { useThemeMode } from "../../lib/theme";
 
 interface TopbarProps {
   onToggleSidebar: () => void;
@@ -13,6 +15,7 @@ interface TopbarProps {
 
 export function Topbar({ onToggleSidebar }: TopbarProps) {
   const { session, signOut, signOutAll } = useAuth();
+  const { theme, toggleTheme } = useThemeMode();
   const navigate = useNavigate();
   const [openMenu, setOpenMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -43,6 +46,7 @@ export function Topbar({ onToggleSidebar }: TopbarProps) {
       </div>
 
       <div className="topbar-end">
+        <ThemeToggleButton theme={theme} onToggle={toggleTheme} />
         <button type="button" className="topbar-notification-btn" aria-label="Notifications">
           <Bell size={16} />
           <Badge variant="info" size="sm">

@@ -17,6 +17,7 @@ import { FirstPasswordPage } from "./pages/FirstPasswordPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { ForbiddenPage } from "./pages/ForbiddenPage";
 import { LoginPage } from "./pages/LoginPage";
+import { LandingPage } from "./pages/LandingPage";
 import { MyResultsPage } from "./pages/MyResultsPage";
 import { MyTestsPage } from "./pages/MyTestsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -35,7 +36,7 @@ function RootRoute() {
     return <div className="boot-screen">Инициализация...</div>;
   }
   if (!session) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
   return <Navigate to={getDefaultRouteByRole(session.me.role)} replace />;
 }
@@ -43,7 +44,8 @@ function RootRoute() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<RootRoute />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/home" element={<RootRoute />} />
       <Route path="/403" element={<ForbiddenPage />} />
       <Route
         path="/login"
