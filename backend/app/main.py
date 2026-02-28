@@ -10,6 +10,7 @@ from starlette.responses import Response
 
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.public import router as public_router
 from app.api.routes.reports import router as reports_router
 from app.api.routes.tests import router as tests_router
 from app.api.routes.users import router as users_router
@@ -130,6 +131,7 @@ for api_router in PUBLIC_ROUTERS:
     app.include_router(api_router)
 for api_router in PUBLIC_ROUTERS:
     app.include_router(api_router, prefix=V1_PREFIX)
+app.include_router(public_router)
 
 
 @app.get("/health")
