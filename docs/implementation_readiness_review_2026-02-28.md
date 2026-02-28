@@ -84,3 +84,4 @@
 - `% сущностей с утверждённой миграционной стратегией`.
 - `MTTR по инцидентам из runbook-категорий`.
 - `% продуктовых KPI из feature docs, нормализованных в metrics_definition`.
+- `% продуктовых KPI из feature docs, нормализованных в metrics_definition`.
