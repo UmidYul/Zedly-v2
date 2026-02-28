@@ -61,7 +61,8 @@ PostgreSQL + Redis mode:
 
 ```bash
 ZEDLY_STORAGE_BACKEND=postgres
-ZEDLY_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/zedly
+POSTGRES_PASSWORD=<local-dev-password>
+ZEDLY_DATABASE_URL=postgresql://postgres:<local-dev-password>@localhost:5432/zedly
 ZEDLY_SESSIONS_BACKEND=redis
 ZEDLY_REDIS_URL=redis://localhost:6379/0
 ```
@@ -79,7 +80,7 @@ ZEDLY_AUTH_REFRESH_COOKIE_DOMAIN=
 Bootstrap SQL:
 
 ```bash
-export ZEDLY_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/zedly
+export ZEDLY_DATABASE_URL=postgresql://postgres:<local-dev-password>@localhost:5432/zedly
 python scripts/run_sql_migrations.py
 python scripts/run_sql_migrations.py --check
 ```

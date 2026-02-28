@@ -18,13 +18,18 @@ on:
 jobs:
   migration-sequence-check:
     runs-on: ubuntu-latest
+    env:
+      CI_POSTGRES_USER: postgres
+      CI_POSTGRES_DB: zedly
+      CI_POSTGRES_PASSWORD: ${{ format('pg_{0}_{1}', github.run_id, github.run_attempt) }}
+      ZEDLY_DATABASE_URL: ${{ format('postgresql://postgres:{0}@localhost:5432/zedly', format('pg_{0}_{1}', github.run_id, github.run_attempt)) }}
     services:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: zedly
+          POSTGRES_USER: ${{ env.CI_POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.CI_POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ env.CI_POSTGRES_DB }}
         ports:
           - "5432:5432"
         options: >-
@@ -32,8 +37,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
-    env:
-      ZEDLY_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zedly
     steps:
       - name: Checkout
         uses: actions/checkout@v4
