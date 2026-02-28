@@ -1,3 +1,5 @@
+import { Input } from "./FormFields";
+
 interface InputFieldProps {
   label: string;
   type?: string;
@@ -18,16 +20,14 @@ export function InputField({
   onChange
 }: InputFieldProps) {
   return (
-    <label className="input-field">
-      <span className="input-label">{label}</span>
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
+    <Input
+      label={label}
+      type={type}
+      value={value}
+      placeholder={placeholder}
+      autoComplete={autoComplete}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    />
   );
 }
