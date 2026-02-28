@@ -12,6 +12,11 @@ import { AuthProvider } from "./state/auth-context";
 import "./styles/tokens.css";
 import "./styles/globals.css";
 
+if (typeof document !== "undefined") {
+  const initialTheme = window.localStorage.getItem("zedly.theme");
+  document.documentElement.setAttribute("data-theme", initialTheme === "light" ? "light" : "dark");
+}
+
 registerSW({ immediate: true });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

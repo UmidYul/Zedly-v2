@@ -5,6 +5,7 @@ import { ProgressBar } from "../components/ui/ProgressBar";
 import { Stat } from "../components/ui/Stat";
 import { AppShell } from "../components/layout/AppShell";
 import { useAuth } from "../state/auth-context";
+import { Link } from "react-router-dom";
 
 function DirectorDashboard() {
   const latestTests = [
@@ -113,10 +114,23 @@ function DirectorDashboard() {
 function TeacherDashboard({ teacherClasses }: { teacherClasses: Array<{ class_id: string; class_name: string }> }) {
   return (
     <section className="content-stack">
-      <Card>
+      <Card className="dashboard-hero" variant="elevated">
         <Card.Body>
-          <h2>Профиль</h2>
-          <p className="panel-note">Панель преподавателя: тесты, классы, результаты.</p>
+          <h2>Teacher Workbench</h2>
+          <p className="panel-note">
+            Создание и назначение тестов в одном месте: вручную, через AI или из Marketplace.
+          </p>
+          <div className="dashboard-cta-row">
+            <Link to="/tests-workbench" className="dashboard-cta dashboard-cta-primary">
+              Создать тест
+            </Link>
+            <Link to="/tests-workbench" className="dashboard-cta dashboard-cta-secondary">
+              Сгенерировать с AI
+            </Link>
+            <Link to="/class-invites" className="dashboard-cta dashboard-cta-secondary">
+              Назначить классу
+            </Link>
+          </div>
         </Card.Body>
       </Card>
       <section className="panel-grid">
@@ -124,6 +138,24 @@ function TeacherDashboard({ teacherClasses }: { teacherClasses: Array<{ class_id
         <Stat label="Активных сессий" value={5} delta={-2} />
         <Stat label="Учеников в классах" value={teacherClasses.length * 28 || 0} delta={4} />
         <Stat label="Avg score недели" value="76%" delta={3} />
+      </section>
+
+      <section className="quick-actions-grid">
+        <article className="quick-action-card">
+          <strong>Ручной конструктор</strong>
+          <p>Полный контроль над вопросами, временем и сложностью.</p>
+          <span className="quick-action-meta">Draft за 2-4 минуты</span>
+        </article>
+        <article className="quick-action-card">
+          <strong>AI-генерация</strong>
+          <p>Загрузите материал и получите 10-20 вопросов с модерацией.</p>
+          <span className="quick-action-meta">Быстрый старт за 1-2 минуты</span>
+        </article>
+        <article className="quick-action-card">
+          <strong>Marketplace</strong>
+          <p>Копируйте готовые тесты и адаптируйте под свой класс.</p>
+          <span className="quick-action-meta">Публикация за 1 минуту</span>
+        </article>
       </section>
 
       <Card>
