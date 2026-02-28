@@ -20,10 +20,14 @@ class User:
     role: Role
     full_name: str
     status: UserStatus
+    login: str
     email: str | None = None
     phone: str | None = None
     telegram_id: int | None = None
     password_hash: str | None = None
+    password_temporary: bool = False
+    google_linked: bool = False
+    telegram_linked: bool = False
     language: str = "uz"
     avatar_url: str | None = None
     subscription_tier: str = "free"

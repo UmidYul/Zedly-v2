@@ -1,0 +1,133 @@
+name: release-gate
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "docs/07_api/openapi.yaml"
+      - ".spectral.yaml"
+      - ".github/workflows/release-gate.yml"
+  push:
+    branches: ["main", "master"]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "docs/07_api/openapi.yaml"
+      - ".spectral.yaml"
+      - ".github/workflows/release-gate.yml"
+  workflow_dispatch:
+
+jobs:
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: zedly
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d zedly"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ZEDLY_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zedly
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Apply SQL migrations on clean DB
+        run: python backend/scripts/run_sql_migrations.py
+
+      - name: Ensure no pending migrations after apply
+        run: python backend/scripts/run_sql_migrations.py --check
+
+  backend-contract:
+    runs-on: ubuntu-latest
+    needs: migrations
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Lint OpenAPI with Spectral
+        run: npx -y @stoplight/spectral-cli lint --fail-severity=warn docs/07_api/openapi.yaml
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Verify OpenAPI route contract
+        run: python backend/scripts/verify_openapi_contract.py
+
+      - name: Run API contract tests
+        run: python -m pytest backend/tests/test_v1_contracts.py -q
+
+  frontend-e2e:
+    runs-on: ubuntu-latest
+    needs: backend-contract
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "frontend/package-lock.json"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: npm run e2e:install
+
+      - name: Run Playwright smoke tests
+        working-directory: frontend
+        run: npm run e2e
+
+  gate:
+    runs-on: ubuntu-latest
+    needs: [migrations, backend-contract, frontend-e2e]
+    steps:
+      - name: Release gate passed
+        run: echo "release-gate: migrations + backend-contract + frontend-e2e passed."

@@ -1,19 +1,19 @@
 from __future__ import annotations
 
+import re
+import secrets
 import uuid
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Any
 
-from app.core.constants import ACCESS_TOKEN_TTL, FREEMIUM_STUDENT_LIMIT_PER_TEACHER, LOCKOUT_SECONDS, LOGIN_WINDOW_SECONDS, MAX_LOGIN_ATTEMPTS_PER_WINDOW, ONBOARDING_TOKEN_TTL, REFRESH_TOKEN_TTL
+from app.core.constants import ACCESS_TOKEN_TTL, LOCKOUT_SECONDS, LOGIN_WINDOW_SECONDS, MAX_LOGIN_ATTEMPTS_PER_WINDOW, REFRESH_TOKEN_TTL
 from app.core.errors import AppError
-from app.core.permissions import canonical_payload_permissions
-from app.core.settings import settings
+from app.core.permissions import canonical_payload_permissions, canonical_role
 from app.core.security import (
     create_access_token,
     generate_refresh_token,
-    hash_refresh_token,
     hash_password,
+    hash_refresh_token,
     now_utc,
     to_unix,
     verify_password,
@@ -21,9 +21,12 @@ from app.core.security import (
 from app.core.telegram import validate_telegram_auth
 from app.core.types import ErrorCode, Role, UserStatus
 from app.repositories.exceptions import BackendUnavailableError
-from app.repositories.models import RefreshRecord, School, SchoolClass, User
+from app.repositories.models import RefreshRecord, SchoolClass, User
 from app.repositories.runtime import get_data_store, get_session_store
 from app.services.audit_service import service as audit
+
+
+FIRST_PASSWORD_CHALLENGE_TTL_SECONDS = 900
 
 
 @dataclass(slots=True)
@@ -37,9 +40,27 @@ def _service_unavailable() -> AppError:
 
 
 class AuthService:
+    def _data_store(self):
+        try:
+            return get_data_store()
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+
+    def _session_store(self):
+        try:
+            return get_session_store()
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+
     def _find_user_by_email(self, email: str) -> User | None:
         try:
             return get_data_store().find_user_by_email(email)
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+
+    def _find_user_by_login(self, login: str) -> User | None:
+        try:
+            return get_data_store().find_user_by_login(login)
         except BackendUnavailableError as exc:
             raise _service_unavailable() from exc
 
@@ -69,24 +90,55 @@ class AuthService:
                 message="Account disabled",
             )
 
-    def _enforce_login_limit(self, identity: str) -> None:
+    def _enforce_login_limit(self, identity: str, ip: str | None) -> None:
+        checks: list[tuple[str, str]] = [("identity", identity)]
+        normalized_ip = ip.strip() if ip else ""
+        if normalized_ip and normalized_ip != "unknown":
+            checks.append(("ip", f"ip:{normalized_ip}"))
+
         try:
-            attempts = get_session_store().get_recent_login_attempts(identity, window_seconds=LOGIN_WINDOW_SECONDS)
+            session_store = get_session_store()
+            now_ts = int(now_utc().timestamp())
         except BackendUnavailableError as exc:
             raise _service_unavailable() from exc
 
-        if len(attempts) >= MAX_LOGIN_ATTEMPTS_PER_WINDOW:
-            retry_after = attempts[0] + LOCKOUT_SECONDS - int(now_utc().timestamp())
-            raise AppError(
-                status_code=429,
-                code=ErrorCode.TOO_MANY_REQUESTS.value,
-                message="Too many login attempts",
-                details={"retry_after_seconds": max(retry_after, 1)},
-            )
+        for scope, key in checks:
+            try:
+                attempts = session_store.get_recent_login_attempts(key, window_seconds=LOGIN_WINDOW_SECONDS)
+            except BackendUnavailableError as exc:
+                raise _service_unavailable() from exc
 
-    def _record_failed_login(self, identity: str) -> None:
+            if len(attempts) >= MAX_LOGIN_ATTEMPTS_PER_WINDOW:
+                retry_after = attempts[0] + LOCKOUT_SECONDS - now_ts
+                retry_after_seconds = max(retry_after, 1)
+                audit.record(
+                    event="auth.login.rate_limited",
+                    user_id=None,
+                    school_id=None,
+                    ip=ip,
+                    details={
+                        "scope": scope,
+                        "identity": identity if scope == "identity" else None,
+                        "retry_after_seconds": retry_after_seconds,
+                    },
+                )
+                raise AppError(
+                    status_code=429,
+                    code=ErrorCode.TOO_MANY_REQUESTS.value,
+                    message="Too many login attempts",
+                    details={"retry_after_seconds": retry_after_seconds, "scope": scope},
+                )
+
+    def _record_failed_login(self, identity: str, ip: str | None) -> None:
+        keys = [identity]
+        normalized_ip = ip.strip() if ip else ""
+        if normalized_ip and normalized_ip != "unknown":
+            keys.append(f"ip:{normalized_ip}")
+
         try:
-            get_session_store().record_failed_login(identity)
+            session_store = get_session_store()
+            for key in keys:
+                session_store.record_failed_login(key)
         except BackendUnavailableError as exc:
             raise _service_unavailable() from exc
 
@@ -131,6 +183,30 @@ class AuthService:
             raise _service_unavailable() from exc
         return TokenPair(access_token=access_token, refresh_token=refresh_token)
 
+    def _is_password_valid(self, password: str) -> bool:
+        return len(password) >= 8 and any(char.isdigit() for char in password)
+
+    def _generate_otp_password(self, *, length: int = 8) -> str:
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*"
+        return "".join(secrets.choice(alphabet) for _ in range(length))
+
+    def _slug_name(self, full_name: str) -> str:
+        normalized = re.sub(r"[^a-zA-Z0-9]+", ".", full_name.strip().lower())
+        normalized = re.sub(r"\.+", ".", normalized).strip(".")
+        return normalized or "user"
+
+    def _generate_login(self, *, full_name: str, school_id: str | None, class_id: str | None) -> str:
+        base_name = self._slug_name(full_name)
+        school_fragment = (school_id or "zedly").replace("school_", "").replace("-", "").lower()
+        class_fragment = (class_id or "gen").replace("cls_", "").replace("-", "").lower()
+
+        for _ in range(100):
+            suffix = secrets.randbelow(90) + 10
+            candidate = f"{base_name}.{class_fragment}.{school_fragment}.{suffix}"
+            if not self._find_user_by_login(candidate):
+                return candidate
+        raise AppError(status_code=500, code=ErrorCode.SERVICE_UNAVAILABLE.value, message="Unable to generate unique login")
+
     def _revoke_refresh_hash(self, refresh_hash: str) -> None:
         try:
             sessions = get_session_store()
@@ -158,13 +234,93 @@ class AuthService:
         except BackendUnavailableError as exc:
             raise _service_unavailable() from exc
 
-    def login(self, *, email: str, password: str, ip: str | None) -> TokenPair:
-        identity = email.lower().strip()
-        self._enforce_login_limit(identity)
+    def _issue_first_password_challenge(self, *, user: User) -> dict[str, Any]:
+        token = f"pwd_{uuid.uuid4().hex}"
+        payload = {"user_id": user.id, "purpose": "first_password_change"}
+        try:
+            get_session_store().save_onboarding_token(
+                token,
+                payload,
+                ttl_seconds=FIRST_PASSWORD_CHALLENGE_TTL_SECONDS,
+            )
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+        return {
+            "status": "password_change_required",
+            "challenge_token": token,
+            "expires_in_seconds": FIRST_PASSWORD_CHALLENGE_TTL_SECONDS,
+        }
 
-        user = self._find_user_by_email(identity)
+    def _normalize_role(self, role: str) -> Role:
+        raw = canonical_role(role.strip().lower())
+        try:
+            return Role(raw)
+        except ValueError as exc:
+            raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="Unsupported role value") from exc
+
+    def _normalize_email(self, email: str | None) -> str | None:
+        if email is None:
+            return None
+        normalized = email.strip().lower()
+        return normalized or None
+
+    def _resolve_hierarchy_scope(
+        self,
+        *,
+        actor: User,
+        target_role: Role,
+        school_id: str | None,
+        district_id: str | None,
+    ) -> tuple[str | None, str | None]:
+        data_store = self._data_store()
+
+        if actor.role == Role.SUPERADMIN:
+            if target_role != Role.MINISTRY:
+                raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Superadmin can create only ministry accounts")
+            return None, district_id.strip() if district_id else None
+
+        if actor.role == Role.MINISTRY:
+            if target_role != Role.INSPECTOR:
+                raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Ministry can create only RONO accounts")
+            normalized_district = district_id.strip() if district_id else ""
+            if not normalized_district:
+                raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="district_id is required for RONO account")
+            return None, normalized_district
+
+        if actor.role == Role.INSPECTOR:
+            if target_role != Role.DIRECTOR:
+                raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="RONO can create only director accounts")
+            normalized_school = school_id.strip() if school_id else ""
+            if not normalized_school:
+                raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="school_id is required for director account")
+            school = data_store.get_school_by_id(normalized_school)
+            if not school:
+                raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="School not found")
+            if actor.district_id and school.district_id and school.district_id != actor.district_id:
+                raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Cross-district access denied")
+            return school.id, school.district_id or actor.district_id
+
+        if actor.role == Role.DIRECTOR:
+            if target_role not in {Role.TEACHER, Role.STUDENT, Role.PSYCHOLOGIST, Role.PARENT}:
+                raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Director can create only school user accounts")
+            if not actor.school_id:
+                raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Director school is required")
+            if school_id and school_id != actor.school_id:
+                raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Cross-school account provisioning denied")
+            school = data_store.get_school_by_id(actor.school_id)
+            if not school:
+                raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="School not found")
+            return school.id, school.district_id
+
+        raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Role cannot provision accounts")
+
+    def login(self, *, login: str, password: str, ip: str | None) -> TokenPair | dict[str, Any]:
+        identity = login.lower().strip()
+        self._enforce_login_limit(identity, ip)
+
+        user = self._find_user_by_login(identity)
         if not user or not user.password_hash or not verify_password(password, user.password_hash):
-            self._record_failed_login(identity)
+            self._record_failed_login(identity, ip)
             audit.record(
                 event="auth.login.failed",
                 user_id=user.id if user else None,
@@ -180,14 +336,97 @@ class AuthService:
         self._clear_failed_logins(identity)
         self._ensure_user_active(user)
 
+        if user.password_temporary:
+            audit.record(
+                event="auth.login.password_change_required",
+                user_id=user.id,
+                school_id=user.school_id,
+                ip=ip,
+            )
+            return self._issue_first_password_challenge(user=user)
+
         pair = self._issue_token_pair(user)
         audit.record(event="auth.login.success", user_id=user.id, school_id=user.school_id, ip=ip)
         return pair
 
-    def telegram_login(self, *, auth_data: dict[str, Any], role_hint: str | None, bot_token: str, ip: str | None) -> dict[str, Any]:
-        _ = role_hint
-        if not settings.feature_telegram_onboarding_token_flow_enabled:
-            raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Telegram onboarding flow is disabled")
+    def complete_first_password_change(
+        self,
+        *,
+        challenge_token: str,
+        new_password: str,
+        repeat_password: str,
+        ip: str | None,
+    ) -> dict[str, Any]:
+        if new_password != repeat_password:
+            raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="Passwords do not match")
+        if not self._is_password_valid(new_password):
+            raise AppError(
+                status_code=400,
+                code=ErrorCode.VALIDATION_ERROR.value,
+                message="Password must be at least 8 characters and contain at least one digit",
+            )
+
+        try:
+            payload = get_session_store().pop_onboarding_token(challenge_token)
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+        if not payload or payload.get("purpose") != "first_password_change":
+            raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="Password change challenge is invalid or expired")
+
+        user_id = str(payload.get("user_id") or "")
+        try:
+            user = self._data_store().get_user_by_id(user_id)
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+        if not user:
+            raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="User not found")
+        self._ensure_user_active(user)
+
+        user.password_hash = hash_password(new_password)
+        user.password_temporary = False
+        self._save_user(user)
+
+        pair = self._issue_token_pair(user)
+        audit.record(event="auth.password.first_change.success", user_id=user.id, school_id=user.school_id, ip=ip)
+        return {
+            "status": "login_methods_prompt",
+            "google_connect_url": "/api/v1/users/me/login-methods/google/connect",
+            "telegram_connect_url": "/api/v1/users/me/login-methods/telegram/connect",
+            "skip_label": "Пропустить — сделаю позже",
+            "access_token": pair.access_token,
+            "refresh_token": pair.refresh_token,
+            "token_type": "bearer",
+            "expires_in_seconds": int(ACCESS_TOKEN_TTL.total_seconds()),
+        }
+
+    def request_password_reset(self, *, login: str, ip: str | None) -> dict[str, Any]:
+        identity = login.lower().strip()
+        user = self._find_user_by_login(identity) or self._find_user_by_email(identity)
+
+        if user and user.password_hash:
+            reset_token = f"pwd_{uuid.uuid4().hex}"
+            try:
+                get_session_store().save_onboarding_token(
+                    reset_token,
+                    {"user_id": user.id, "purpose": "password_reset"},
+                    ttl_seconds=900,
+                )
+            except BackendUnavailableError as exc:
+                raise _service_unavailable() from exc
+
+        audit.record(
+            event="auth.password_reset.requested",
+            user_id=user.id if user else None,
+            school_id=user.school_id if user else None,
+            ip=ip,
+        )
+
+        return {
+            "status": "accepted",
+            "message": "If account exists, reset instructions were sent",
+        }
+
+    def telegram_login(self, *, auth_data: dict[str, Any], bot_token: str, ip: str | None) -> dict[str, Any]:
         is_valid, reason = validate_telegram_auth(auth_data, bot_token=bot_token, max_age_seconds=86400)
         if not is_valid:
             if reason == "expired":
@@ -204,137 +443,159 @@ class AuthService:
 
         telegram_id_raw = auth_data.get("id")
         if telegram_id_raw is None:
-            raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="Telegram id is required")
+            raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="Telegram auth id is required")
 
-        telegram_id = int(telegram_id_raw)
-        user = self._find_user_by_telegram_id(telegram_id)
-        if user:
-            if user.status == UserStatus.PENDING_APPROVAL:
-                return {
-                    "status": "pending_approval",
-                    "message": "Your account is pending school approval",
-                }
-            self._ensure_user_active(user)
-            pair = self._issue_token_pair(user)
-            audit.record(event="auth.telegram.login.success", user_id=user.id, school_id=user.school_id, ip=ip)
+        user = self._find_user_by_telegram_id(int(telegram_id_raw))
+        if not user or not user.telegram_linked:
             return {
-                "access_token": pair.access_token,
-                "refresh_token": pair.refresh_token,
-                "expires_in_seconds": 900,
+                "status": "telegram_not_connected",
+                "message": "Telegram пока не подключен. Войдите по логину и подключите его в разделе «Способы входа».",
             }
 
-        onboarding_token = f"onb_{uuid.uuid4().hex}"
-        payload = {
-            "telegram_id": telegram_id,
-            "first_name": str(auth_data.get("first_name") or "Telegram User"),
-            "username": auth_data.get("username"),
-            "auth_date": int(auth_data.get("auth_date") or 0),
-        }
-        try:
-            get_session_store().save_onboarding_token(
-                onboarding_token,
-                payload,
-                ttl_seconds=int(ONBOARDING_TOKEN_TTL.total_seconds()),
-            )
-        except BackendUnavailableError as exc:
-            raise _service_unavailable() from exc
-        audit.record(event="auth.telegram.onboarding_token.issued", user_id=None, school_id=None, ip=ip, details={"telegram_id": telegram_id})
+        self._ensure_user_active(user)
+        if user.password_temporary:
+            return {
+                "status": "telegram_not_connected",
+                "message": "Сначала завершите первый вход: смените одноразовый пароль в Zedly.",
+            }
+
+        pair = self._issue_token_pair(user)
+        audit.record(event="auth.telegram.login.success", user_id=user.id, school_id=user.school_id, ip=ip)
         return {
-            "status": "onboarding_required",
-            "telegram_id": telegram_id,
-            "onboarding_token": onboarding_token,
-            "expires_in_seconds": int(ONBOARDING_TOKEN_TTL.total_seconds()),
+            "access_token": pair.access_token,
+            "refresh_token": pair.refresh_token,
+            "token_type": "bearer",
+            "expires_in_seconds": int(ACCESS_TOKEN_TTL.total_seconds()),
         }
 
-    def register_teacher(
+    def provision_account(
         self,
         *,
+        actor: User,
+        role: str,
         full_name: str,
-        email: str,
-        password: str,
-        subject: str,
         school_id: str | None,
-        school_name: str | None,
-        onboarding_token: str | None,
+        district_id: str | None,
+        class_id: str | None,
+        class_name: str | None,
+        subject: str | None,
+        email: str | None,
+        phone: str | None,
         ip: str | None,
-    ) -> User:
-        if onboarding_token and not settings.feature_telegram_onboarding_token_flow_enabled:
-            raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Telegram onboarding flow is disabled")
-        identity = email.lower().strip()
-        if self._find_user_by_email(identity):
-            raise AppError(status_code=409, code=ErrorCode.VALIDATION_ERROR.value, message="Email already in use")
-
-        onboarding_payload: dict[str, Any] | None = None
-        if onboarding_token:
-            try:
-                onboarding_payload = get_session_store().pop_onboarding_token(onboarding_token)
-            except BackendUnavailableError as exc:
-                raise _service_unavailable() from exc
-            if not onboarding_payload:
-                raise AppError(
-                    status_code=400,
-                    code=ErrorCode.ONBOARDING_TOKEN_INVALID.value,
-                    message="Onboarding token is invalid or expired",
-                )
-
+    ) -> dict[str, Any]:
         try:
-            data_store = get_data_store()
+            normalized_name = full_name.strip()
+            if not normalized_name:
+                raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="full_name is required")
+
+            target_role = self._normalize_role(role)
+            resolved_school_id, resolved_district_id = self._resolve_hierarchy_scope(
+                actor=actor,
+                target_role=target_role,
+                school_id=school_id,
+                district_id=district_id,
+            )
+
+            normalized_email = self._normalize_email(email)
+            if normalized_email and self._find_user_by_email(normalized_email):
+                raise AppError(status_code=409, code=ErrorCode.VALIDATION_ERROR.value, message="Email already in use")
+
+            data_store = self._data_store()
+            normalized_class_id = class_id.strip() if class_id else None
+            if actor.role == Role.DIRECTOR and target_role == Role.STUDENT:
+                if not normalized_class_id:
+                    raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="class_id is required for student account")
+                school_class = data_store.get_class_by_id(normalized_class_id)
+                if not school_class:
+                    raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="Class not found")
+                if school_class.school_id != resolved_school_id:
+                    raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Cross-school class assignment denied")
+
+            if actor.role == Role.DIRECTOR and target_role == Role.TEACHER and normalized_class_id:
+                school_class = data_store.get_class_by_id(normalized_class_id)
+                if not school_class:
+                    raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="Class not found")
+                if school_class.school_id != resolved_school_id:
+                    raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Cross-school class assignment denied")
+
+            login_value = self._generate_login(
+                full_name=normalized_name,
+                school_id=resolved_school_id,
+                class_id=normalized_class_id,
+            )
+            otp_password = self._generate_otp_password()
+
+            user = User(
+                id=f"usr_{uuid.uuid4().hex[:10]}",
+                school_id=resolved_school_id,
+                district_id=resolved_district_id,
+                role=target_role,
+                full_name=normalized_name,
+                status=UserStatus.ACTIVE,
+                login=login_value,
+                email=normalized_email,
+                phone=phone.strip() if phone else None,
+                password_hash=hash_password(otp_password),
+                password_temporary=True,
+            )
+            self._save_user(user)
+
+            assigned_class_id: str | None = None
+
+            if actor.role == Role.DIRECTOR and target_role == Role.TEACHER:
+                subject_code = (subject or "general").strip().lower() or "general"
+                data_store.save_teacher_subject(teacher_id=user.id, school_id=resolved_school_id or "", subject_code=subject_code)
+
+                if class_name and class_name.strip():
+                    assigned_class_id = f"cls_{uuid.uuid4().hex[:8]}"
+                    data_store.save_class(
+                        SchoolClass(
+                            id=assigned_class_id,
+                            school_id=resolved_school_id or "",
+                            teacher_id=user.id,
+                            name=class_name.strip(),
+                        )
+                    )
+                elif normalized_class_id:
+                    assigned_class_id = normalized_class_id
+
+                if assigned_class_id:
+                    data_store.save_teacher_class_assignment(
+                        teacher_id=user.id,
+                        school_id=resolved_school_id or "",
+                        class_id=assigned_class_id,
+                        subject_code=subject_code,
+                    )
+
+            if actor.role == Role.DIRECTOR and target_role == Role.STUDENT:
+                data_store.add_student_to_class(normalized_class_id, user.id)
+                assigned_class_id = normalized_class_id
+
+            audit.record(
+                event="auth.account.provisioned",
+                user_id=user.id,
+                school_id=user.school_id,
+                ip=ip,
+                details={
+                    "created_by": actor.id,
+                    "created_by_role": actor.role.value,
+                    "target_role": user.role.value,
+                    "class_id": assigned_class_id,
+                },
+            )
+            return {
+                "user_id": user.id,
+                "role": user.role.value,
+                "login": user.login,
+                "otp_password": otp_password,
+                "school_id": user.school_id,
+                "district_id": user.district_id,
+                "class_id": assigned_class_id,
+                "status": user.status.value,
+                "message": "Account provisioned",
+            }
         except BackendUnavailableError as exc:
             raise _service_unavailable() from exc
-
-        resolved_school_id = school_id
-        if resolved_school_id:
-            school = data_store.get_school_by_id(resolved_school_id)
-            if not school:
-                raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="School not found")
-        else:
-            if not school_name:
-                raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="School name is required for new school")
-            resolved_school_id = f"school_{uuid.uuid4().hex[:8]}"
-            data_store.save_school(School(id=resolved_school_id, name=school_name, subscription_plan="freemium"))
-
-        telegram_id = int(onboarding_payload["telegram_id"]) if onboarding_payload and onboarding_payload.get("telegram_id") else None
-        if telegram_id is not None and self._find_user_by_telegram_id(telegram_id):
-            raise AppError(status_code=409, code=ErrorCode.VALIDATION_ERROR.value, message="Telegram account already linked")
-
-        user = User(
-            id=f"usr_{uuid.uuid4().hex[:10]}",
-            school_id=resolved_school_id,
-            role=Role.TEACHER,
-            full_name=full_name,
-            status=UserStatus.PENDING_APPROVAL,
-            email=identity,
-            password_hash=hash_password(password),
-            telegram_id=telegram_id,
-        )
-        data_store.save_user(user)
-
-        # Bootstrap teacher default class/assignment so the teacher can start immediately.
-        class_id = f"cls_{uuid.uuid4().hex[:8]}"
-        data_store.save_class(
-            SchoolClass(
-                id=class_id,
-                school_id=resolved_school_id,
-                teacher_id=user.id,
-                name="Default",
-            )
-        )
-        data_store.save_teacher_subject(teacher_id=user.id, school_id=resolved_school_id, subject_code=subject)
-        data_store.save_teacher_class_assignment(
-            teacher_id=user.id,
-            school_id=resolved_school_id,
-            class_id=class_id,
-            subject_code=subject,
-        )
-
-        audit.record(
-            event="auth.register.teacher.success",
-            user_id=user.id,
-            school_id=user.school_id,
-            ip=ip,
-            details={"onboarding_token_used": bool(onboarding_token)},
-        )
-        return user
 
     def refresh(self, *, refresh_token: str, ip: str | None) -> TokenPair:
         token_hash = hash_refresh_token(refresh_token)
@@ -412,7 +673,14 @@ class AuthService:
         audit.record(event="auth.logout", user_id=user.id, school_id=user.school_id, ip=ip)
         return 1
 
-    def logout_all(self, *, user: User, ip: str | None) -> int:
+    def logout_all(
+        self,
+        *,
+        user: User,
+        ip: str | None,
+        access_jti: str | None = None,
+        access_exp: int | None = None,
+    ) -> int:
         try:
             sessions = get_session_store()
             hashes = list(sessions.list_user_tokens(user.id))
@@ -423,54 +691,16 @@ class AuthService:
             self._revoke_refresh_hash(token_hash)
         user.session_invalidated_at = to_unix(now_utc())
         self._save_user(user)
+
+        if access_jti and access_exp:
+            ttl = max(access_exp - int(now_utc().timestamp()), 1)
+            try:
+                sessions.blacklist_access_token(access_jti, ttl_seconds=ttl)
+            except BackendUnavailableError as exc:
+                raise _service_unavailable() from exc
+
         audit.record(event="auth.logout_all", user_id=user.id, school_id=user.school_id, ip=ip, details={"count": len(hashes)})
         return len(hashes)
-
-    def accept_invite(self, *, invite_code: str, full_name: str, telegram_id: int | None, ip: str | None) -> TokenPair:
-        try:
-            data = get_data_store()
-            invite = data.get_invite(invite_code)
-        except BackendUnavailableError as exc:
-            raise _service_unavailable() from exc
-        if not invite:
-            raise AppError(status_code=400, code=ErrorCode.INVITE_NOT_FOUND.value, message="Invite code not found")
-
-        if now_utc() >= invite.expires_at:
-            raise AppError(status_code=410, code=ErrorCode.INVITE_EXPIRED.value, message="Invite code expired")
-
-        if telegram_id is not None and self._find_user_by_telegram_id(telegram_id):
-            raise AppError(status_code=409, code=ErrorCode.VALIDATION_ERROR.value, message="Telegram account already linked")
-
-        teacher = data.get_user_by_id(invite.teacher_id)
-        if teacher and teacher.role == Role.TEACHER:
-            teacher_students_count = data.count_students_for_teacher(invite.teacher_id)
-            if teacher_students_count >= FREEMIUM_STUDENT_LIMIT_PER_TEACHER:
-                raise AppError(
-                    status_code=403,
-                    code=ErrorCode.CLASS_LIMIT_REACHED.value,
-                    message="Class student limit reached for freemium teacher",
-                )
-
-        new_user_id = f"usr_{uuid.uuid4().hex[:10]}"
-        new_student = User(
-            id=new_user_id,
-            school_id=invite.school_id,
-            role=Role.STUDENT,
-            full_name=full_name,
-            status=UserStatus.ACTIVE,
-            telegram_id=telegram_id,
-            password_hash=None,
-        )
-        self._save_user(new_student)
-        try:
-            data.add_student_to_class(invite.class_id, new_user_id)
-            data.increment_invite_usage(invite.code)
-        except BackendUnavailableError as exc:
-            raise _service_unavailable() from exc
-
-        pair = self._issue_token_pair(new_student)
-        audit.record(event="auth.invite.accepted", user_id=new_user_id, school_id=invite.school_id, ip=ip)
-        return pair
 
 
 service = AuthService()

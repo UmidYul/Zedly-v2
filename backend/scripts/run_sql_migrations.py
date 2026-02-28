@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -140,7 +141,43 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Verify migration history and fail if there are pending migrations (does not apply).",
     )
+    parser.add_argument(
+        "--connect-retries",
+        type=int,
+        default=int(os.getenv("ZEDLY_MIGRATIONS_CONNECT_RETRIES", "15")),
+        help=(
+            "How many times to retry database connection on startup before failing. "
+            "Defaults to ZEDLY_MIGRATIONS_CONNECT_RETRIES or 15."
+        ),
+    )
+    parser.add_argument(
+        "--connect-retry-delay-seconds",
+        type=float,
+        default=float(os.getenv("ZEDLY_MIGRATIONS_CONNECT_RETRY_DELAY_SECONDS", "2")),
+        help=(
+            "Delay between connection retries in seconds. "
+            "Defaults to ZEDLY_MIGRATIONS_CONNECT_RETRY_DELAY_SECONDS or 2."
+        ),
+    )
     return parser.parse_args()
+
+
+def _connect_with_retries(database_url: str, retries: int, retry_delay_seconds: float):
+    attempts = max(1, retries)
+    for attempt in range(1, attempts + 1):
+        try:
+            return psycopg.connect(database_url)
+        except psycopg.OperationalError as exc:
+            if attempt == attempts:
+                raise RuntimeError(
+                    "Could not connect to PostgreSQL for migrations after "
+                    f"{attempts} attempt(s)."
+                ) from exc
+            print(
+                "PostgreSQL is not ready yet "
+                f"(attempt {attempt}/{attempts}). Retrying in {retry_delay_seconds:g}s..."
+            )
+            time.sleep(max(0.0, retry_delay_seconds))
 
 
 def main() -> None:
@@ -152,7 +189,11 @@ def main() -> None:
     migrations = _load_migration_files(sql_dir)
     print(f"Discovered {len(migrations)} migration file(s) in {sql_dir}")
 
-    with psycopg.connect(args.database_url) as conn:
+    with _connect_with_retries(
+        args.database_url,
+        retries=args.connect_retries,
+        retry_delay_seconds=args.connect_retry_delay_seconds,
+    ) as conn:
         with conn.cursor() as cur:
             _ensure_migration_table(cur)
             applied = _load_applied_migrations(cur)

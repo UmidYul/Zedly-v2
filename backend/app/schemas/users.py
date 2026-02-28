@@ -5,16 +5,24 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class TeacherClassRef(BaseModel):
+    class_id: str
+    class_name: str
+
+
 class UserResponse(BaseModel):
     id: str
     school_id: str | None
     role: str
     full_name: str
+    login: str
     email: str | None = None
     phone: str | None = None
-    telegram_id: int | None = None
     status: str
     language: str = "uz"
+    avatar_url: str | None = None
+    teacher_classes: list[TeacherClassRef] | None = None
+    login_methods: list[str] = Field(default_factory=list)
 
 
 class PatchMeRequest(BaseModel):
@@ -28,6 +36,12 @@ class PatchMeRequest(BaseModel):
 class SchoolUsersResponse(BaseModel):
     school_id: str
     users: list[UserResponse]
+    total_in_scope: int
+    filtered_total: int
+    role: str = "all"
+    status: str = "all"
+    class_id: str | None = None
+    search: str | None = None
 
 
 class SchoolUserPatchRequest(BaseModel):
@@ -42,31 +56,33 @@ class ClassInviteResponse(BaseModel):
     expires_at: str
 
 
-class RegisterSchoolPayload(BaseModel):
-    school_id: str | None = None
-    name: str | None = None
-
-
-class RegisterUserRequest(BaseModel):
-    role: str = "teacher"
+class AccountProvisionRequest(BaseModel):
+    role: str
     full_name: str
-    email: str
-    password: str
-    subject: str = "general"
-    school: RegisterSchoolPayload = Field(default_factory=RegisterSchoolPayload)
-    onboarding_token: str | None = None
+    school_id: str | None = None
+    district_id: str | None = None
+    class_id: str | None = None
+    class_name: str | None = None
+    subject: str | None = None
+    email: str | None = None
+    phone: str | None = None
 
 
-class RegisterUserResponse(BaseModel):
+class AccountProvisionResponse(BaseModel):
     user_id: str
     role: str
+    login: str
+    otp_password: str
     school_id: str | None
-    status: str
-    message: str | None = None
-    access_token: str | None = None
-    refresh_token: str | None = None
-    token_type: str = "bearer"
-    expires_in_seconds: int = 900
+    district_id: str | None = None
+    class_id: str | None = None
+    status: str = "active"
+    message: str | None = "Account provisioned"
+
+
+class LoginMethodsResponse(BaseModel):
+    google_connected: bool
+    telegram_connected: bool
 
 
 class TestCreateRequest(BaseModel):

@@ -1,0 +1,25 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap");
+
+:root {
+  --font-heading: "Sora", "Segoe UI", sans-serif;
+  --font-body: "Manrope", "Segoe UI", sans-serif;
+
+  --bg: #f6faf8;
+  --surface: #ffffff;
+  --surface-soft: #edf6f3;
+  --text: #102a43;
+  --muted: #486581;
+
+  --primary: #0f766e;
+  --primary-strong: #0b5d58;
+  --accent: #ea580c;
+  --accent-soft: #fed7aa;
+
+  --danger: #b42318;
+  --success: #116d5f;
+
+  --border: #d9e2ec;
+  --shadow: 0 18px 50px rgba(16, 42, 67, 0.12);
+  --radius-lg: 20px;
+  --radius-md: 12px;
+}

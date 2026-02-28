@@ -15,10 +15,14 @@ CREATE TABLE IF NOT EXISTS users (
   role VARCHAR(32) NOT NULL,
   full_name VARCHAR(255) NOT NULL,
   status VARCHAR(32) NOT NULL DEFAULT 'active',
+  login VARCHAR(255) NOT NULL,
   email VARCHAR(255) NULL,
   phone VARCHAR(64) NULL,
   telegram_id BIGINT NULL UNIQUE,
   password_hash TEXT NULL,
+  password_temporary BOOLEAN NOT NULL DEFAULT FALSE,
+  google_linked BOOLEAN NOT NULL DEFAULT FALSE,
+  telegram_linked BOOLEAN NOT NULL DEFAULT FALSE,
   language VARCHAR(10) NOT NULL DEFAULT 'uz',
   avatar_url TEXT NULL,
   subscription_tier VARCHAR(32) NOT NULL DEFAULT 'free',
@@ -28,6 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE INDEX IF NOT EXISTS idx_users_school_role ON users(school_id, role);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users(lower(email)) WHERE email IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_login_lower ON users(lower(login));
 
 CREATE TABLE IF NOT EXISTS classes (
   id VARCHAR(50) PRIMARY KEY,
@@ -203,16 +208,16 @@ INSERT INTO schools (id, name, subscription_plan, district_id) VALUES
   ('school_B', 'School B', 'standard', 'district_Y')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO users (id, school_id, role, full_name, status, email, password_hash, telegram_id)
+INSERT INTO users (id, school_id, role, full_name, status, login, email, password_hash, telegram_id, telegram_linked)
 VALUES
-  ('usr_teacher_A', 'school_A', 'teacher', 'Teacher A', 'active', 'teachera@school.uz', '$2b$12$th8JYcilWPsfssI0Ja8HqO9vPmeo2XXm0YREYT.s1ecVZNxYuvy9W', 1110001),
-  ('usr_director_A', 'school_A', 'director', 'Director A', 'active', 'directora@school.uz', '$2b$12$JYp8ih04MFc9wribHlcpAONfgTma/6.2I7BA7Mjaw2lIRdtGemaf2', 1110002),
-  ('usr_student_A', 'school_A', 'student', 'Student A', 'active', 'studenta@school.uz', '$2b$12$8Kkz4TPZrSrkiUoMoGKEfuHTOdmOzkZM093/rQWu73Dikr6dEEk9W', 1110003),
-  ('usr_teacher_B', 'school_B', 'teacher', 'Teacher B', 'active', 'teacherb@school.uz', '$2b$12$th8JYcilWPsfssI0Ja8HqO9vPmeo2XXm0YREYT.s1ecVZNxYuvy9W', 2220001)
+  ('usr_teacher_A', 'school_A', 'teacher', 'Teacher A', 'active', 'teacher.a.schoola.1', 'teachera@school.uz', '$2b$12$th8JYcilWPsfssI0Ja8HqO9vPmeo2XXm0YREYT.s1ecVZNxYuvy9W', 1110001, TRUE),
+  ('usr_director_A', 'school_A', 'director', 'Director A', 'active', 'director.a.schoola.1', 'directora@school.uz', '$2b$12$JYp8ih04MFc9wribHlcpAONfgTma/6.2I7BA7Mjaw2lIRdtGemaf2', 1110002, TRUE),
+  ('usr_student_A', 'school_A', 'student', 'Student A', 'active', 'student.a.7a.schoola.1', 'studenta@school.uz', '$2b$12$8Kkz4TPZrSrkiUoMoGKEfuHTOdmOzkZM093/rQWu73Dikr6dEEk9W', 1110003, TRUE),
+  ('usr_teacher_B', 'school_B', 'teacher', 'Teacher B', 'active', 'teacher.b.schoolb.1', 'teacherb@school.uz', '$2b$12$th8JYcilWPsfssI0Ja8HqO9vPmeo2XXm0YREYT.s1ecVZNxYuvy9W', 2220001, TRUE)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO users (id, school_id, district_id, role, full_name, status, email, password_hash)
-VALUES ('usr_inspector_X', NULL, 'district_X', 'inspector', 'Inspector X', 'active', 'inspector@district.uz', '$2b$12$8R9F2ZHFJRV.kz4RInZHUu0nzZ7Qsrk5uxT5LL3Di8RWxTaNPnzsS')
+INSERT INTO users (id, school_id, district_id, role, full_name, status, login, email, password_hash)
+VALUES ('usr_inspector_X', NULL, 'district_X', 'inspector', 'Inspector X', 'active', 'inspector.x.districtx.1', 'inspector@district.uz', '$2b$12$8R9F2ZHFJRV.kz4RInZHUu0nzZ7Qsrk5uxT5LL3Di8RWxTaNPnzsS')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO classes (id, school_id, teacher_id, name)

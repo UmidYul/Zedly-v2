@@ -10,9 +10,13 @@ Top implemented backend endpoints mapped across feature, domain entities, accept
 | REQ-AUTH-003 | Auth | Token rotation | `POST /auth/refresh` | session store / refresh family | AC-17 | token reuse incidents | integration |
 | REQ-AUTH-004 | Auth | Session terminate | `POST /auth/logout` | session store blacklist | AC-17 | active sessions per user | integration |
 | REQ-AUTH-005 | Auth | Global logout | `POST /auth/logout-all` | session store / `users` | AC-17 | forced logout propagation | integration |
-| REQ-AUTH-006 | Onboarding | Student invite accept | `POST /auth/invite/accept` | `invite_codes`, `users`, `class_students` | AC-18 | invite conversion rate | integration |
+| REQ-AUTH-006 | First login | OTP password replacement | `POST /auth/password/change-first` | session store challenge, `users` | AC-17, AC-22 | first-login completion rate | integration |
+| REQ-USER-000 | Provisioning | Hierarchical account creation | `POST /users/provision` | `users`, `schools`, `classes` | 7, AC-22 | account provisioning SLA | integration |
 | REQ-USER-001 | User profile | View profile | `GET /users/me` | `users` | AC-18 | profile read latency | integration |
 | REQ-USER-002 | User profile | Edit profile | `PATCH /users/me` | `users` | AC-18 | profile update success rate | integration |
+| REQ-USER-002A | User profile | View login methods | `GET /users/me/login-methods` | `users` | 8, AC-22 | quick-login attach rate | integration |
+| REQ-USER-002B | User profile | Connect Google login | `POST /users/me/login-methods/google/connect` | `users` | 8, AC-22 | google connect conversion | integration |
+| REQ-USER-002C | User profile | Connect Telegram login | `POST /users/me/login-methods/telegram/connect` | `users` | 8, AC-22 | telegram connect conversion | integration |
 | REQ-USER-003 | School admin | List school users | `GET /schools/{school_id}/users` | `users` | AC-19 | unauthorized cross-school attempts | integration |
 | REQ-USER-004 | School admin | Activate teacher | `PATCH /schools/{school_id}/users/{user_id}` | `users` | AC-19 | pending approval lead time | integration |
 | REQ-USER-005 | Class management | Generate invite | `POST /classes/{class_id}/invite` | `invite_codes`, `classes` | AC-18 | invite issuance latency | integration |

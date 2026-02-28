@@ -445,8 +445,15 @@ class TestService:
             raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Session belongs to another student")
         if session.status in {"completed", "expired"}:
             assignment = data_store.get_assignment_by_id(session.assignment_id)
+            test = data_store.get_test_by_id(session.test_id)
             answers = data_store.list_session_answers(session.id)
-            return self._build_finish_result(session=session, assignment=assignment, answers=answers, total_questions=len(session.question_order))
+            return self._build_finish_result(
+                session=session,
+                assignment=assignment,
+                test=test,
+                answers=answers,
+                total_questions=len(session.question_order),
+            )
 
         answers = data_store.list_session_answers(session.id)
         total_questions = len(session.question_order)
@@ -491,18 +498,27 @@ class TestService:
         analytics_service.recalculate_for_session(session.id)
 
         assignment = data_store.get_assignment_by_id(session.assignment_id)
-        return self._build_finish_result(session=session, assignment=assignment, answers=answers, total_questions=total_questions, correct_answers=correct_answers)
+        return self._build_finish_result(
+            session=session,
+            assignment=assignment,
+            test=test,
+            answers=answers,
+            total_questions=total_questions,
+            correct_answers=correct_answers,
+        )
 
     def _build_finish_result(
         self,
         *,
         session: TestSessionResource,
         assignment: TestAssignment | None,
+        test: TestResource | None,
         answers: list[SessionAnswer],
         total_questions: int,
         correct_answers: int | None = None,
     ) -> dict[str, Any]:
         computed_correct = correct_answers if correct_answers is not None else sum(1 for value in answers if value.is_correct)
+        topic_breakdown = self._build_topic_breakdown(test=test, answers=answers)
         return {
             "session_id": session.id,
             "assignment_id": assignment.id if assignment else session.assignment_id,
@@ -512,6 +528,124 @@ class TestService:
             "answered_questions": len(answers),
             "correct_answers": computed_correct,
             "late_submission": session.late_submission,
+            "topic_breakdown": topic_breakdown,
+        }
+
+    def _build_topic_breakdown(self, *, test: TestResource | None, answers: list[SessionAnswer]) -> list[dict[str, Any]]:
+        if not test:
+            return []
+
+        answers_by_question = {value.question_id: value for value in answers}
+        by_topic: dict[str, dict[str, int]] = {}
+
+        for question in test.questions:
+            topic = question.topic or "general"
+            bucket = by_topic.setdefault(topic, {"total_questions": 0, "answered_questions": 0, "correct_answers": 0})
+            bucket["total_questions"] += 1
+
+            answer = answers_by_question.get(question.question_id)
+            if answer is None:
+                continue
+            bucket["answered_questions"] += 1
+            if answer.is_correct:
+                bucket["correct_answers"] += 1
+
+        result: list[dict[str, Any]] = []
+        for topic, stats in sorted(by_topic.items(), key=lambda item: item[0]):
+            total = stats["total_questions"]
+            score_percent = round((stats["correct_answers"] / total) * 100, 2) if total else 0.0
+            result.append(
+                {
+                    "topic": topic,
+                    "total_questions": total,
+                    "answered_questions": stats["answered_questions"],
+                    "correct_answers": stats["correct_answers"],
+                    "score_percent": score_percent,
+                }
+            )
+        return result
+
+    def class_results(self, *, current_user: User, test_id: str, class_id: str) -> dict[str, Any]:
+        if current_user.role != Role.TEACHER:
+            raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Only teacher can access class results")
+
+        try:
+            data_store = get_data_store()
+            test = data_store.get_test_by_id(test_id)
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+
+        if not test:
+            raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="Test not found")
+        if test.teacher_id != current_user.id:
+            raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Teacher can view only own test results")
+        if test.school_id != (current_user.school_id or ""):
+            raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Cross-school access denied")
+
+        assignment = data_store.find_assignment(test_id=test_id, class_id=class_id)
+        if not assignment:
+            raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="Assignment not found")
+        if assignment.teacher_id != current_user.id:
+            raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Assignment does not belong to teacher")
+
+        students = data_store.list_students_by_class(class_id)
+        sessions = [value for value in data_store.list_sessions_by_class(class_id) if value.assignment_id == assignment.id]
+
+        latest_by_student: dict[str, TestSessionResource] = {}
+        for session in sorted(sessions, key=lambda item: item.started_at):
+            latest_by_student[session.student_id] = session
+
+        completed_scores: list[float] = []
+        rows: list[dict[str, Any]] = []
+        for student in students:
+            session = latest_by_student.get(student.id)
+            if session is None:
+                rows.append(
+                    {
+                        "student_id": student.id,
+                        "student_name": student.full_name,
+                        "session_id": None,
+                        "status": "not_started",
+                        "score_percent": None,
+                        "answered_questions": 0,
+                        "total_questions": len(test.questions),
+                        "correct_answers": 0,
+                        "late_submission": False,
+                        "completed_at": None,
+                    }
+                )
+                continue
+
+            answers = data_store.list_session_answers(session.id)
+            correct_answers = sum(1 for value in answers if value.is_correct)
+            if session.status in {"completed", "expired"} and session.score_percent is not None:
+                completed_scores.append(float(session.score_percent))
+            rows.append(
+                {
+                    "student_id": student.id,
+                    "student_name": student.full_name,
+                    "session_id": session.id,
+                    "status": session.status,
+                    "score_percent": session.score_percent,
+                    "answered_questions": len(answers),
+                    "total_questions": len(session.question_order),
+                    "correct_answers": correct_answers,
+                    "late_submission": bool(session.late_submission),
+                    "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+                }
+            )
+
+        rows.sort(key=lambda item: item["student_name"].lower())
+        average_score = round(sum(completed_scores) / len(completed_scores), 2) if completed_scores else 0.0
+
+        return {
+            "test_id": test_id,
+            "class_id": class_id,
+            "total_students": len(students),
+            "sessions_total": len(latest_by_student),
+            "completed_sessions": len(completed_scores),
+            "average_score": average_score,
+            "students": rows,
         }
 
     def offline_bundle(self, *, current_user: User, test_id: str) -> dict[str, Any]:

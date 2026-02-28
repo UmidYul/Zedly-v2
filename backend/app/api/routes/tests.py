@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.middleware.chain import AuthContext, audit_trail, authenticate, enforce_assignment_scope, require_permission
 from app.schemas.tests import (
     AssignTestRequest,
     AssignTestResponse,
+    ClassResultsResponse,
     FinishSessionRequest,
     FinishSessionResponse,
     OfflineBundleResponse,
@@ -52,6 +53,19 @@ def get_test(
     result = test_service.get_test(current_user=auth.user, test_id=test_id)
     audit_trail(event="test.viewed", auth=auth, resource_id=test_id, request=request)
     return result
+
+
+@router.get("/tests/{test_id}/results", response_model=ClassResultsResponse)
+def class_results(
+    test_id: str,
+    request: Request,
+    class_id: str = Query(...),
+    auth: AuthContext = Depends(require_permission("view_class_results")),
+) -> ClassResultsResponse:
+    enforce_assignment_scope(auth=auth, class_id=class_id)
+    result = test_service.class_results(current_user=auth.user, test_id=test_id, class_id=class_id)
+    audit_trail(event="test.class_results.viewed", auth=auth, resource_id=test_id, request=request, details={"class_id": class_id})
+    return ClassResultsResponse(**result)
 
 
 @router.post("/tests/{test_id}/assign", response_model=AssignTestResponse, status_code=201)

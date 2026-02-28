@@ -97,6 +97,14 @@ class FinishSessionRequest(BaseModel):
     final_answers: list[AnswerSubmitItem] = Field(default_factory=list)
 
 
+class TopicBreakdownItem(BaseModel):
+    topic: str
+    total_questions: int
+    answered_questions: int
+    correct_answers: int
+    score_percent: float
+
+
 class FinishSessionResponse(BaseModel):
     session_id: str
     assignment_id: str
@@ -106,6 +114,30 @@ class FinishSessionResponse(BaseModel):
     answered_questions: int
     correct_answers: int
     late_submission: bool
+    topic_breakdown: list[TopicBreakdownItem] = Field(default_factory=list)
+
+
+class ClassResultStudentItem(BaseModel):
+    student_id: str
+    student_name: str
+    session_id: str | None = None
+    status: str
+    score_percent: float | None = None
+    answered_questions: int
+    total_questions: int
+    correct_answers: int
+    late_submission: bool
+    completed_at: str | None = None
+
+
+class ClassResultsResponse(BaseModel):
+    test_id: str
+    class_id: str
+    total_students: int
+    sessions_total: int
+    completed_sessions: int
+    average_score: float
+    students: list[ClassResultStudentItem] = Field(default_factory=list)
 
 
 class OfflineBundleResponse(BaseModel):

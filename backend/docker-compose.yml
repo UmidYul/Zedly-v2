@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16
@@ -51,6 +49,15 @@ services:
       ZEDLY_REDIS_URL: redis://redis:6379/0
       ZEDLY_WORKER_POLL_SECONDS: 5
     command: ["python", "worker.py"]
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
 
 volumes:
   pgdata:

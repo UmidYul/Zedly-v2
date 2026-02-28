@@ -45,6 +45,10 @@ class DataStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def find_user_by_login(self, login: str) -> User | None:
+        raise NotImplementedError
+
+    @abstractmethod
     def find_user_by_telegram_id(self, telegram_id: int) -> User | None:
         raise NotImplementedError
 
@@ -70,6 +74,10 @@ class DataStore(ABC):
 
     @abstractmethod
     def list_students_by_teacher(self, teacher_id: str) -> list[User]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def list_students_by_class(self, class_id: str) -> list[User]:
         raise NotImplementedError
 
     @abstractmethod
@@ -228,6 +236,10 @@ class InMemoryDataStore(DataStore):
     def find_user_by_email(self, email: str) -> User | None:
         return next((user for user in store.users.values() if user.email == email), None)
 
+    def find_user_by_login(self, login: str) -> User | None:
+        normalized = login.lower()
+        return next((user for user in store.users.values() if user.login.lower() == normalized), None)
+
     def find_user_by_telegram_id(self, telegram_id: int) -> User | None:
         return next((user for user in store.users.values() if user.telegram_id == telegram_id), None)
 
@@ -252,6 +264,10 @@ class InMemoryDataStore(DataStore):
         for class_id in allowed_classes:
             allowed_students.update(store.class_students.get(class_id, set()))
         return [store.users[user_id] for user_id in sorted(allowed_students) if user_id in store.users]
+
+    def list_students_by_class(self, class_id: str) -> list[User]:
+        student_ids = sorted(store.class_students.get(class_id, set()))
+        return [store.users[user_id] for user_id in student_ids if user_id in store.users]
 
     def count_students_for_teacher(self, teacher_id: str) -> int:
         return len(self.list_students_by_teacher(teacher_id))
@@ -283,6 +299,7 @@ class InMemoryDataStore(DataStore):
 
     def add_student_to_class(self, class_id: str, student_id: str) -> None:
         store.class_students.setdefault(class_id, set()).add(student_id)
+        store.student_class_enrollments[student_id] = class_id
 
     def save_test(self, test: TestResource) -> None:
         store.tests[test.id] = test
@@ -418,10 +435,14 @@ class PostgresDataStore(DataStore):
             role=Role(row["role"]),
             full_name=row["full_name"],
             status=UserStatus(row["status"]),
+            login=row.get("login") or row.get("email") or row["id"],
             email=row.get("email"),
             phone=row.get("phone"),
             telegram_id=row.get("telegram_id"),
             password_hash=row.get("password_hash"),
+            password_temporary=bool(row.get("password_temporary", False)),
+            google_linked=bool(row.get("google_linked", False)),
+            telegram_linked=bool(row.get("telegram_linked", False)),
             language=row.get("language") or "uz",
             avatar_url=row.get("avatar_url"),
             subscription_tier=row.get("subscription_tier") or "free",
@@ -614,8 +635,8 @@ class PostgresDataStore(DataStore):
                                 role=rls_context.role,
                             )
                         )
-                        for statement in statements:
-                            cur.execute(statement)
+                        for statement, params in statements:
+                            cur.execute(statement, params)
                     yield conn
         except Exception as exc:  # pragma: no cover - integration failure path
             raise BackendUnavailableError(f"postgres unavailable: {exc}") from exc
@@ -633,6 +654,12 @@ class PostgresDataStore(DataStore):
                 cur.execute("SELECT * FROM users WHERE lower(email) = lower(%s) LIMIT 1", (email,))
                 return self._map_user(cur.fetchone())
 
+    def find_user_by_login(self, login: str) -> User | None:
+        with self._connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM users WHERE lower(login) = lower(%s) LIMIT 1", (login,))
+                return self._map_user(cur.fetchone())
+
     def find_user_by_telegram_id(self, telegram_id: int) -> User | None:
         with self._connection() as conn:
             with conn.cursor() as cur:
@@ -645,12 +672,12 @@ class PostgresDataStore(DataStore):
                 cur.execute(
                     """
                     INSERT INTO users (
-                        id, school_id, district_id, role, full_name, status, email, phone, telegram_id,
-                        password_hash, language, avatar_url, subscription_tier, subscription_expires_at,
+                        id, school_id, district_id, role, full_name, status, login, email, phone, telegram_id,
+                        password_hash, password_temporary, google_linked, telegram_linked, language, avatar_url, subscription_tier, subscription_expires_at,
                         last_active_at, session_invalidated_at
                     ) VALUES (
-                        %(id)s, %(school_id)s, %(district_id)s, %(role)s, %(full_name)s, %(status)s, %(email)s, %(phone)s, %(telegram_id)s,
-                        %(password_hash)s, %(language)s, %(avatar_url)s, %(subscription_tier)s, %(subscription_expires_at)s,
+                        %(id)s, %(school_id)s, %(district_id)s, %(role)s, %(full_name)s, %(status)s, %(login)s, %(email)s, %(phone)s, %(telegram_id)s,
+                        %(password_hash)s, %(password_temporary)s, %(google_linked)s, %(telegram_linked)s, %(language)s, %(avatar_url)s, %(subscription_tier)s, %(subscription_expires_at)s,
                         %(last_active_at)s, %(session_invalidated_at)s
                     )
                     ON CONFLICT (id) DO UPDATE SET
@@ -659,10 +686,14 @@ class PostgresDataStore(DataStore):
                         role = EXCLUDED.role,
                         full_name = EXCLUDED.full_name,
                         status = EXCLUDED.status,
+                        login = EXCLUDED.login,
                         email = EXCLUDED.email,
                         phone = EXCLUDED.phone,
                         telegram_id = EXCLUDED.telegram_id,
                         password_hash = EXCLUDED.password_hash,
+                        password_temporary = EXCLUDED.password_temporary,
+                        google_linked = EXCLUDED.google_linked,
+                        telegram_linked = EXCLUDED.telegram_linked,
                         language = EXCLUDED.language,
                         avatar_url = EXCLUDED.avatar_url,
                         subscription_tier = EXCLUDED.subscription_tier,
@@ -677,10 +708,14 @@ class PostgresDataStore(DataStore):
                         "role": user.role.value,
                         "full_name": user.full_name,
                         "status": user.status.value,
+                        "login": user.login,
                         "email": user.email,
                         "phone": user.phone,
                         "telegram_id": user.telegram_id,
                         "password_hash": user.password_hash,
+                        "password_temporary": user.password_temporary,
+                        "google_linked": user.google_linked,
+                        "telegram_linked": user.telegram_linked,
                         "language": user.language,
                         "avatar_url": user.avatar_url,
                         "subscription_tier": user.subscription_tier,
@@ -736,6 +771,21 @@ class PostgresDataStore(DataStore):
                     ORDER BY u.id
                     """,
                     (teacher_id,),
+                )
+                return [self._map_user(row) for row in cur.fetchall() if row is not None]
+
+    def list_students_by_class(self, class_id: str) -> list[User]:
+        with self._connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT u.*
+                    FROM users u
+                    JOIN class_students cs ON cs.student_id = u.id
+                    WHERE cs.class_id = %s
+                    ORDER BY u.id
+                    """,
+                    (class_id,),
                 )
                 return [self._map_user(row) for row in cur.fetchall() if row is not None]
 

@@ -70,9 +70,11 @@ class InMemoryStore:
             school_id="school_A",
             role=Role.TEACHER,
             full_name="Teacher A",
+            login="teacher.a.schoola.1",
             email="teachera@school.uz",
             password_hash=hash_password("teacher-pass"),
             telegram_id=1110001,
+            telegram_linked=True,
             status=UserStatus.ACTIVE,
         )
         self.users["usr_director_A"] = User(
@@ -80,9 +82,11 @@ class InMemoryStore:
             school_id="school_A",
             role=Role.DIRECTOR,
             full_name="Director A",
+            login="director.a.schoola.1",
             email="directora@school.uz",
             password_hash=hash_password("director-pass"),
             telegram_id=1110002,
+            telegram_linked=True,
             status=UserStatus.ACTIVE,
         )
         self.users["usr_student_A"] = User(
@@ -90,9 +94,11 @@ class InMemoryStore:
             school_id="school_A",
             role=Role.STUDENT,
             full_name="Student A",
+            login="student.a.7a.schoola.1",
             email="studenta@school.uz",
             password_hash=hash_password("student-pass"),
             telegram_id=1110003,
+            telegram_linked=True,
             status=UserStatus.ACTIVE,
         )
         self.users["usr_teacher_B"] = User(
@@ -100,9 +106,11 @@ class InMemoryStore:
             school_id="school_B",
             role=Role.TEACHER,
             full_name="Teacher B",
+            login="teacher.b.schoolb.1",
             email="teacherb@school.uz",
             password_hash=hash_password("teacher-pass"),
             telegram_id=2220001,
+            telegram_linked=True,
             status=UserStatus.ACTIVE,
         )
         self.users["usr_inspector_X"] = User(
@@ -111,6 +119,7 @@ class InMemoryStore:
             district_id="district_X",
             role=Role.INSPECTOR,
             full_name="Inspector X",
+            login="inspector.x.districtx.1",
             email="inspector@district.uz",
             password_hash=hash_password("inspector-pass"),
             status=UserStatus.ACTIVE,

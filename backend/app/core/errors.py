@@ -30,7 +30,12 @@ def error_payload(code: str, message: str, details: dict[str, Any] | None = None
 
 
 async def app_error_handler(_: Request, exc: AppError) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content=error_payload(exc.code, exc.message, exc.details))
+    response = JSONResponse(status_code=exc.status_code, content=error_payload(exc.code, exc.message, exc.details))
+    if exc.status_code == 429 and exc.details:
+        retry_after = exc.details.get("retry_after_seconds")
+        if isinstance(retry_after, int) and retry_after > 0:
+            response.headers["Retry-After"] = str(retry_after)
+    return response
 
 
 async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
