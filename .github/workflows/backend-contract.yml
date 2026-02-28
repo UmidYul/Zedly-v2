@@ -1,0 +1,47 @@
+name: backend-contract
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "docs/07_api/openapi.yaml"
+      - ".spectral.yaml"
+      - ".github/workflows/backend-contract.yml"
+  push:
+    branches: ["main", "master"]
+    paths:
+      - "backend/**"
+      - "docs/07_api/openapi.yaml"
+      - ".spectral.yaml"
+      - ".github/workflows/backend-contract.yml"
+
+jobs:
+  openapi-and-contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Lint OpenAPI with Spectral
+        run: npx -y @stoplight/spectral-cli lint --fail-severity=warn docs/07_api/openapi.yaml
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Verify OpenAPI route contract
+        run: python backend/scripts/verify_openapi_contract.py
+
+      - name: Run API contract tests
+        run: python -m pytest backend/tests/test_v1_contracts.py -q

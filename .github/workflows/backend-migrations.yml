@@ -1,0 +1,56 @@
+name: Backend Migrations
+
+on:
+  pull_request:
+    paths:
+      - "backend/sql/**"
+      - "backend/scripts/run_sql_migrations.py"
+      - ".github/workflows/backend-migrations.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/sql/**"
+      - "backend/scripts/run_sql_migrations.py"
+      - ".github/workflows/backend-migrations.yml"
+  workflow_dispatch:
+
+jobs:
+  migration-sequence-check:
+    runs-on: ubuntu-latest
+    env:
+      CI_POSTGRES_USER: postgres
+      CI_POSTGRES_DB: zedly
+      CI_POSTGRES_PASSWORD: ${{ format('pg_{0}_{1}', github.run_id, github.run_attempt) }}
+      ZEDLY_DATABASE_URL: ${{ format('postgresql://postgres:{0}@localhost:5432/zedly', format('pg_{0}_{1}', github.run_id, github.run_attempt)) }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ${{ env.CI_POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.CI_POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ env.CI_POSTGRES_DB }}
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d zedly"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Apply SQL migrations on clean DB
+        run: python backend/scripts/run_sql_migrations.py
+
+      - name: Ensure no pending migrations after apply
+        run: python backend/scripts/run_sql_migrations.py --check

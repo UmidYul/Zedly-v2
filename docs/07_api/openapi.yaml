@@ -1,0 +1,4271 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Zedly API v1",
+    "version": "0.1.0",
+    "description": "Executable API contract for current /api/v1 endpoints.",
+    "contact": {
+      "name": "Zedly API Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "health",
+      "description": "Service health endpoints."
+    },
+    {
+      "name": "auth",
+      "description": "Authentication and session lifecycle endpoints."
+    },
+    {
+      "name": "users",
+      "description": "User profile and school user management endpoints."
+    },
+    {
+      "name": "classes",
+      "description": "Class and invite management endpoints."
+    },
+    {
+      "name": "tests",
+      "description": "Test authoring, assignment, and delivery endpoints."
+    },
+    {
+      "name": "sessions",
+      "description": "Test session answering and finalization endpoints."
+    },
+    {
+      "name": "analytics",
+      "description": "Analytics dashboard endpoints."
+    },
+    {
+      "name": "reports",
+      "description": "Report generation and retrieval endpoints."
+    }
+  ],
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "tags": [
+          "health"
+        ],
+        "description": "Health check endpoint.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeHealth"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "authLogin",
+        "tags": [
+          "auth"
+        ],
+        "description": "Authenticate by login and password (OTP for first entry).",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Login success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeLoginResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthLoginRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/telegram": {
+      "post": {
+        "operationId": "authTelegram",
+        "tags": [
+          "auth"
+        ],
+        "description": "Authenticate via Telegram after account is linked in profile settings.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Telegram auth success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeTelegramAuth"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthTelegramRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "authRefresh",
+        "tags": [
+          "auth"
+        ],
+        "description": "Rotate refresh token and issue a new access token.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Refresh success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeTokenPair"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid refresh token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "authLogout",
+        "tags": [
+          "auth"
+        ],
+        "description": "Invalidate current refresh token.",
+        "responses": {
+          "200": {
+            "description": "Logout success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeAuthStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthLogoutRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout-all": {
+      "post": {
+        "operationId": "authLogoutAll",
+        "tags": [
+          "auth"
+        ],
+        "description": "Invalidate all active sessions for current user.",
+        "responses": {
+          "200": {
+            "description": "Logout-all success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeAuthStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password/change-first": {
+      "post": {
+        "operationId": "authChangeFirstPassword",
+        "tags": [
+          "auth"
+        ],
+        "description": "Complete mandatory OTP password change on first login.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Password changed and session issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeFirstPasswordChange"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthFirstPasswordChangeRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password/forgot": {
+      "post": {
+        "operationId": "authForgotPassword",
+        "tags": [
+          "auth"
+        ],
+        "description": "Request password reset token.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeForgotPassword"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthForgotPasswordRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/provision": {
+      "post": {
+        "operationId": "usersProvision",
+        "tags": [
+          "users"
+        ],
+        "description": "Provision account by hierarchy role with auto-generated login and OTP.",
+        "responses": {
+          "201": {
+            "description": "Account provisioned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeProvisionAccount"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsersProvisionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me": {
+      "get": {
+        "operationId": "usersMeGet",
+        "tags": [
+          "users"
+        ],
+        "description": "Get current authenticated user profile.",
+        "responses": {
+          "200": {
+            "description": "Profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeUser"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "usersMePatch",
+        "tags": [
+          "users"
+        ],
+        "description": "Update current authenticated user profile.",
+        "responses": {
+          "200": {
+            "description": "Profile updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeUser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsersPatchMeRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/login-methods": {
+      "get": {
+        "operationId": "usersGetLoginMethods",
+        "tags": [
+          "users"
+        ],
+        "description": "Get login methods state for current user profile.",
+        "responses": {
+          "200": {
+            "description": "Login methods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeLoginMethods"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/login-methods/google/connect": {
+      "post": {
+        "operationId": "usersConnectGoogleLogin",
+        "tags": [
+          "users"
+        ],
+        "description": "Connect Google as a quick login method.",
+        "responses": {
+          "200": {
+            "description": "Google connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeLoginMethods"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/login-methods/telegram/connect": {
+      "post": {
+        "operationId": "usersConnectTelegramLogin",
+        "tags": [
+          "users"
+        ],
+        "description": "Connect Telegram as a quick login method.",
+        "responses": {
+          "200": {
+            "description": "Telegram connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeLoginMethods"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{school_id}/users": {
+      "get": {
+        "operationId": "schoolUsersList",
+        "tags": [
+          "users"
+        ],
+        "description": "List school users with optional filters.",
+        "parameters": [
+          {
+            "name": "school_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "School users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeSchoolUsers"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schools/{school_id}/users/{user_id}": {
+      "patch": {
+        "operationId": "schoolUserPatch",
+        "tags": [
+          "users"
+        ],
+        "description": "Update school user status.",
+        "parameters": [
+          {
+            "name": "school_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeUser"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchoolUserPatchRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/classes/{class_id}/invite": {
+      "post": {
+        "operationId": "classInviteCreate",
+        "tags": [
+          "classes"
+        ],
+        "description": "Create class invite code for class distribution flow.",
+        "parameters": [
+          {
+            "name": "class_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invite created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeClassInvite"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tests": {
+      "post": {
+        "operationId": "testsCreate",
+        "tags": [
+          "tests"
+        ],
+        "description": "Create a test with questions.",
+        "responses": {
+          "201": {
+            "description": "Test created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeTestCreate"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestsCreateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tests/{test_id}": {
+      "get": {
+        "operationId": "testsGet",
+        "tags": [
+          "tests"
+        ],
+        "description": "Get test details.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeTestDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tests/{test_id}/results": {
+      "get": {
+        "operationId": "testsClassResults",
+        "tags": [
+          "tests"
+        ],
+        "description": "Get teacher-scoped class results for a test.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "class_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Class results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeClassResults"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tests/{test_id}/assign": {
+      "post": {
+        "operationId": "testsAssign",
+        "tags": [
+          "tests"
+        ],
+        "description": "Assign test to one or more classes.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Assigned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeAssignTest"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestsAssignRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tests/{test_id}/sessions": {
+      "post": {
+        "operationId": "testsSessionStart",
+        "tags": [
+          "tests"
+        ],
+        "description": "Start a student test session.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Session started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeStartSession"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestsStartSessionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tests/{test_id}/offline-bundle": {
+      "get": {
+        "operationId": "testsOfflineBundle",
+        "tags": [
+          "tests"
+        ],
+        "description": "Get offline test bundle for assigned student.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offline bundle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeOfflineBundle"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/answers": {
+      "post": {
+        "operationId": "sessionAnswersSubmit",
+        "tags": [
+          "sessions"
+        ],
+        "description": "Submit answers for active test session.",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Answers submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeSubmitAnswers"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionsSubmitAnswersRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/finish": {
+      "post": {
+        "operationId": "sessionFinish",
+        "tags": [
+          "sessions"
+        ],
+        "description": "Finalize session and compute score.",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session finalized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeFinishSession"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionsFinishRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/sync": {
+      "post": {
+        "operationId": "sessionSync",
+        "tags": [
+          "sessions"
+        ],
+        "description": "Sync offline answers for a session.",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session synced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeSyncSession"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionsSubmitAnswersRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/teacher/dashboard": {
+      "get": {
+        "operationId": "analyticsTeacherDashboard",
+        "tags": [
+          "analytics"
+        ],
+        "description": "Get teacher analytics dashboard snapshot.",
+        "responses": {
+          "200": {
+            "description": "Teacher dashboard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeTeacherDashboard"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/director/dashboard": {
+      "get": {
+        "operationId": "analyticsDirectorDashboard",
+        "tags": [
+          "analytics"
+        ],
+        "description": "Get director analytics dashboard snapshot.",
+        "responses": {
+          "200": {
+            "description": "Director dashboard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeDirectorDashboard"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Plan upgrade required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/inspector/dashboard": {
+      "get": {
+        "operationId": "analyticsInspectorDashboard",
+        "tags": [
+          "analytics"
+        ],
+        "description": "Get inspector analytics dashboard snapshot.",
+        "responses": {
+          "200": {
+            "description": "Inspector dashboard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeInspectorDashboard"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/generate": {
+      "post": {
+        "operationId": "reportsGenerate",
+        "tags": [
+          "reports"
+        ],
+        "description": "Queue report generation job.",
+        "responses": {
+          "202": {
+            "description": "Queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeReportGenerate"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportsGenerateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{report_id}/status": {
+      "get": {
+        "operationId": "reportsStatus",
+        "tags": [
+          "reports"
+        ],
+        "description": "Get report generation status.",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelopeReportStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{report_id}/download": {
+      "get": {
+        "operationId": "reportsDownload",
+        "tags": [
+          "reports"
+        ],
+        "description": "Download generated report via redirect.",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to report file"
+          },
+          "409": {
+            "description": "Report not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "example": {
+          "code": "string",
+          "message": "string"
+        }
+      },
+      "ApiErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": false
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "examples": [
+          {
+            "ok": false,
+            "error": {
+              "code": "resource_not_found",
+              "message": "Entity not found",
+              "details": {
+                "resource": "report",
+                "resource_id": "rpt_missing"
+              }
+            }
+          }
+        ]
+      },
+      "TokenPair": {
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token",
+          "token_type",
+          "expires_in_seconds"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "refresh_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "bearer"
+            ]
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "example": {
+          "access_token": "string",
+          "refresh_token": "string",
+          "token_type": "bearer",
+          "expires_in_seconds": 1
+        }
+      },
+      "HealthData": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "status": "string"
+        }
+      },
+      "AuthStatusData": {
+        "type": "object",
+        "required": [
+          "status",
+          "sessions_terminated"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "sessions_terminated": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "example": {
+          "status": "string",
+          "sessions_terminated": 0
+        }
+      },
+      "ForgotPasswordAcceptedData": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "debug_reset_token": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "status": "accepted",
+          "message": "string"
+        }
+      },
+      "ProvisionAccountData": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "role",
+          "login",
+          "otp_password",
+          "status"
+        ],
+        "properties": {
+          "user_id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "login": {
+            "type": "string"
+          },
+          "otp_password": {
+            "type": "string"
+          },
+          "school_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "district_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "class_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "example": {
+          "user_id": "usr_123",
+          "role": "student",
+          "login": "ali.karimov.9a.47",
+          "otp_password": "Xk7#mP2q",
+          "school_id": "school_A",
+          "district_id": "district_X",
+          "class_id": "cls_A_7A",
+          "status": "active",
+          "message": "Account provisioned"
+        }
+      },
+      "PasswordChangeRequiredData": {
+        "type": "object",
+        "required": [
+          "status",
+          "challenge_token",
+          "expires_in_seconds"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "password_change_required"
+            ]
+          },
+          "challenge_token": {
+            "type": "string"
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "example": {
+          "status": "password_change_required",
+          "challenge_token": "pwd_xxx",
+          "expires_in_seconds": 900
+        }
+      },
+      "LoginResultData": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TokenPair"
+          },
+          {
+            "$ref": "#/components/schemas/PasswordChangeRequiredData"
+          }
+        ]
+      },
+      "FirstPasswordChangeData": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TokenPair"
+          },
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "google_connect_url",
+              "telegram_connect_url",
+              "skip_label"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "login_methods_prompt"
+                ]
+              },
+              "google_connect_url": {
+                "type": "string"
+              },
+              "telegram_connect_url": {
+                "type": "string"
+              },
+              "skip_label": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "example": {
+          "status": "login_methods_prompt",
+          "google_connect_url": "/api/v1/users/me/login-methods/google/connect",
+          "telegram_connect_url": "/api/v1/users/me/login-methods/telegram/connect",
+          "skip_label": "Пропустить — сделаю позже",
+          "access_token": "access.jwt.token",
+          "refresh_token": "refresh.jwt.token",
+          "token_type": "bearer",
+          "expires_in_seconds": 900
+        }
+      },
+      "LoginMethodsData": {
+        "type": "object",
+        "required": [
+          "google_connected",
+          "telegram_connected"
+        ],
+        "properties": {
+          "google_connected": {
+            "type": "boolean"
+          },
+          "telegram_connected": {
+            "type": "boolean"
+          }
+        },
+        "example": {
+          "google_connected": true,
+          "telegram_connected": false
+        }
+      },
+      "TelegramNotConnectedData": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "telegram_not_connected"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "status": "telegram_not_connected",
+          "message": "string"
+        }
+      },
+      "TelegramAuthResultData": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TokenPair"
+          },
+          {
+            "$ref": "#/components/schemas/TelegramNotConnectedData"
+          }
+        ],
+        "example": {
+          "access_token": "string",
+          "refresh_token": "string",
+          "token_type": "bearer",
+          "expires_in_seconds": 1
+        }
+      },
+      "TeacherClassRef": {
+        "type": "object",
+        "required": [
+          "class_id",
+          "class_name"
+        ],
+        "properties": {
+          "class_id": {
+            "type": "string"
+          },
+          "class_name": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "class_id": "string",
+          "class_name": "string"
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "school_id",
+          "role",
+          "full_name",
+          "login",
+          "status",
+          "language"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "school_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "login": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "avatar_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "teacher_classes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TeacherClassRef"
+            }
+          },
+          "login_methods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "example": {
+          "id": "string",
+          "school_id": "string",
+          "role": "string",
+          "full_name": "string",
+          "login": "string",
+          "status": "string",
+          "language": "string"
+        }
+      },
+      "SchoolUsersResponseData": {
+        "type": "object",
+        "required": [
+          "school_id",
+          "users",
+          "total_in_scope",
+          "filtered_total",
+          "role",
+          "status"
+        ],
+        "properties": {
+          "school_id": {
+            "type": "string"
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/User"
+            }
+          },
+          "total_in_scope": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "filtered_total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "class_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "search": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "example": {
+          "school_id": "string",
+          "users": [
+            {
+              "id": "string",
+              "school_id": "string",
+              "role": "string",
+              "full_name": "string",
+              "login": "string",
+              "status": "string",
+              "language": "string"
+            }
+          ],
+          "total_in_scope": 0,
+          "filtered_total": 0,
+          "role": "string",
+          "status": "string"
+        }
+      },
+      "ClassInviteResponseData": {
+        "type": "object",
+        "required": [
+          "class_id",
+          "code",
+          "expires_at"
+        ],
+        "properties": {
+          "class_id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "class_id": "string",
+          "code": "string",
+          "expires_at": "string"
+        }
+      },
+      "TestCreateData": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "subject",
+          "school_id",
+          "teacher_id",
+          "mode",
+          "status",
+          "questions_count"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "school_id": {
+            "type": "string"
+          },
+          "teacher_id": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "questions_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "example": {
+          "id": "string",
+          "title": "string",
+          "subject": "string",
+          "school_id": "string",
+          "teacher_id": "string",
+          "mode": "string",
+          "status": "string",
+          "questions_count": 0
+        }
+      },
+      "TestAnswerView": {
+        "type": "object",
+        "required": [
+          "answer_id",
+          "text"
+        ],
+        "properties": {
+          "answer_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "is_correct": {
+            "type": "boolean"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "example": {
+          "answer_id": "string",
+          "text": "string"
+        }
+      },
+      "TestQuestionView": {
+        "type": "object",
+        "required": [
+          "question_id",
+          "text",
+          "topic",
+          "points",
+          "answers"
+        ],
+        "properties": {
+          "question_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "points": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TestAnswerView"
+            }
+          }
+        },
+        "example": {
+          "question_id": "string",
+          "text": "string",
+          "topic": "string",
+          "points": 0,
+          "answers": [
+            {
+              "answer_id": "string",
+              "text": "string"
+            }
+          ]
+        }
+      },
+      "StudentAssignmentRefData": {
+        "type": "object",
+        "required": [
+          "assignment_id",
+          "deadline",
+          "status"
+        ],
+        "properties": {
+          "assignment_id": {
+            "type": "string"
+          },
+          "deadline": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "assignment_id": "string",
+          "deadline": "string",
+          "status": "string"
+        }
+      },
+      "TestDetailsData": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "subject",
+          "school_id",
+          "teacher_id",
+          "mode",
+          "status",
+          "show_answers",
+          "questions",
+          "assignment"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "school_id": {
+            "type": "string"
+          },
+          "teacher_id": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "show_answers": {
+            "type": "string"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TestQuestionView"
+            }
+          },
+          "assignment": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StudentAssignmentRefData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "example": {
+          "id": "string",
+          "title": "string",
+          "subject": "string",
+          "school_id": "string",
+          "teacher_id": "string",
+          "mode": "string",
+          "status": "string",
+          "show_answers": "string",
+          "questions": [
+            {
+              "question_id": "string",
+              "text": "string",
+              "topic": "string",
+              "points": 0,
+              "answers": [
+                {
+                  "answer_id": "string",
+                  "text": "string"
+                }
+              ]
+            }
+          ],
+          "assignment": {
+            "assignment_id": "string",
+            "deadline": "string",
+            "status": "string"
+          }
+        }
+      },
+      "AssignmentCreatedData": {
+        "type": "object",
+        "required": [
+          "assignment_id",
+          "class_id",
+          "deadline",
+          "status"
+        ],
+        "properties": {
+          "assignment_id": {
+            "type": "string"
+          },
+          "class_id": {
+            "type": "string"
+          },
+          "deadline": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "assignment_id": "string",
+          "class_id": "string",
+          "deadline": "string",
+          "status": "string"
+        }
+      },
+      "AssignTestData": {
+        "type": "object",
+        "required": [
+          "test_id",
+          "assignments_created"
+        ],
+        "properties": {
+          "test_id": {
+            "type": "string"
+          },
+          "assignments_created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssignmentCreatedData"
+            }
+          }
+        },
+        "example": {
+          "test_id": "string",
+          "assignments_created": [
+            {
+              "assignment_id": "string",
+              "class_id": "string",
+              "deadline": "string",
+              "status": "string"
+            }
+          ]
+        }
+      },
+      "StartSessionData": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "assignment_id",
+          "status",
+          "expires_at",
+          "question_order",
+          "answer_shuffles"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "assignment_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "question_order": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "answer_shuffles": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "questions": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "example": {
+          "session_id": "string",
+          "assignment_id": "string",
+          "status": "string",
+          "expires_at": "string",
+          "question_order": [
+            "string"
+          ],
+          "answer_shuffles": {
+            "key": [
+              "string"
+            ]
+          }
+        }
+      },
+      "SessionAnswerResultData": {
+        "type": "object",
+        "required": [
+          "question_id",
+          "is_correct",
+          "correct_answer_id"
+        ],
+        "properties": {
+          "question_id": {
+            "type": "string"
+          },
+          "is_correct": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "correct_answer_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "example": {
+          "question_id": "string",
+          "is_correct": true,
+          "correct_answer_id": "string"
+        }
+      },
+      "TopicBreakdownData": {
+        "type": "object",
+        "required": [
+          "topic",
+          "total_questions",
+          "answered_questions",
+          "correct_answers",
+          "score_percent"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "total_questions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "answered_questions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "correct_answers": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "score_percent": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "example": {
+          "topic": "arithmetic",
+          "total_questions": 5,
+          "answered_questions": 5,
+          "correct_answers": 4,
+          "score_percent": 80
+        }
+      },
+      "SubmitAnswersData": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "answers_saved",
+          "total_answered",
+          "status"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "answers_saved": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total_answered": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string"
+          },
+          "per_answer_result": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SessionAnswerResultData"
+            }
+          }
+        },
+        "example": {
+          "session_id": "string",
+          "answers_saved": 0,
+          "total_answered": 0,
+          "status": "string"
+        }
+      },
+      "FinishSessionData": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "assignment_id",
+          "status",
+          "score_percent",
+          "total_questions",
+          "answered_questions",
+          "correct_answers",
+          "late_submission",
+          "topic_breakdown"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "assignment_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "score_percent": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "total_questions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "answered_questions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "correct_answers": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "late_submission": {
+            "type": "boolean"
+          },
+          "topic_breakdown": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopicBreakdownData"
+            }
+          }
+        },
+        "example": {
+          "session_id": "string",
+          "assignment_id": "string",
+          "status": "string",
+          "score_percent": 1.0,
+          "total_questions": 0,
+          "answered_questions": 0,
+          "correct_answers": 0,
+          "late_submission": true,
+          "topic_breakdown": [
+            {
+              "topic": "arithmetic",
+              "total_questions": 1,
+              "answered_questions": 1,
+              "correct_answers": 1,
+              "score_percent": 100
+            }
+          ]
+        }
+      },
+      "OfflineAnswerOptionData": {
+        "type": "object",
+        "required": [
+          "answer_id",
+          "text"
+        ],
+        "properties": {
+          "answer_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "answer_id": "string",
+          "text": "string"
+        }
+      },
+      "OfflineQuestionData": {
+        "type": "object",
+        "required": [
+          "question_id",
+          "text",
+          "topic",
+          "answers"
+        ],
+        "properties": {
+          "question_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfflineAnswerOptionData"
+            }
+          }
+        },
+        "example": {
+          "question_id": "string",
+          "text": "string",
+          "topic": "string",
+          "answers": [
+            {
+              "answer_id": "string",
+              "text": "string"
+            }
+          ]
+        }
+      },
+      "OfflineBundleData": {
+        "type": "object",
+        "required": [
+          "test_id",
+          "mode",
+          "expires_at",
+          "questions"
+        ],
+        "properties": {
+          "test_id": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfflineQuestionData"
+            }
+          }
+        },
+        "example": {
+          "test_id": "string",
+          "mode": "string",
+          "expires_at": "string",
+          "questions": [
+            {
+              "question_id": "string",
+              "text": "string",
+              "topic": "string",
+              "answers": [
+                {
+                  "answer_id": "string",
+                  "text": "string"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "SyncSessionData": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "synced_answers",
+          "total_answered",
+          "late_submission",
+          "status"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "synced_answers": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total_answered": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "late_submission": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "session_id": "string",
+          "synced_answers": 0,
+          "total_answered": 0,
+          "late_submission": true,
+          "status": "string"
+        }
+      },
+      "TeacherDashboardData": {
+        "type": "object",
+        "required": [
+          "teacher_id",
+          "school_id",
+          "period",
+          "class_average",
+          "completed_sessions",
+          "weak_topics",
+          "snapshot_updated_at"
+        ],
+        "properties": {
+          "teacher_id": {
+            "type": "string"
+          },
+          "school_id": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string"
+          },
+          "class_average": {
+            "type": "number"
+          },
+          "completed_sessions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "weak_topics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "snapshot_updated_at": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "teacher_id": "string",
+          "school_id": "string",
+          "period": "string",
+          "class_average": 1.0,
+          "completed_sessions": 0,
+          "weak_topics": [
+            {
+              "key": "value"
+            }
+          ],
+          "snapshot_updated_at": "string"
+        }
+      },
+      "DirectorDashboardData": {
+        "type": "object",
+        "required": [
+          "director_id",
+          "school_id",
+          "period",
+          "school_average",
+          "active_teachers_rate",
+          "conversion_trigger",
+          "snapshot_updated_at"
+        ],
+        "properties": {
+          "director_id": {
+            "type": "string"
+          },
+          "school_id": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string"
+          },
+          "school_average": {
+            "type": "number"
+          },
+          "active_teachers_rate": {
+            "type": "number"
+          },
+          "conversion_trigger": {
+            "type": "boolean"
+          },
+          "conversion_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snapshot_updated_at": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "director_id": "string",
+          "school_id": "string",
+          "period": "string",
+          "school_average": 1.0,
+          "active_teachers_rate": 1.0,
+          "conversion_trigger": true,
+          "snapshot_updated_at": "string"
+        }
+      },
+      "InspectorRankingItemData": {
+        "type": "object",
+        "required": [
+          "school_id",
+          "school_name",
+          "score"
+        ],
+        "properties": {
+          "school_id": {
+            "type": "string"
+          },
+          "school_name": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          }
+        },
+        "example": {
+          "school_id": "string",
+          "school_name": "string",
+          "score": 1.0
+        }
+      },
+      "InspectorDashboardData": {
+        "type": "object",
+        "required": [
+          "inspector_id",
+          "district_id",
+          "period",
+          "schools_total",
+          "schools_with_data",
+          "district_average",
+          "ranking",
+          "snapshot_updated_at"
+        ],
+        "properties": {
+          "inspector_id": {
+            "type": "string"
+          },
+          "district_id": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string"
+          },
+          "schools_total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "schools_with_data": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "district_average": {
+            "type": "number"
+          },
+          "ranking": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InspectorRankingItemData"
+            }
+          },
+          "snapshot_updated_at": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "inspector_id": "string",
+          "district_id": "string",
+          "period": "string",
+          "schools_total": 0,
+          "schools_with_data": 0,
+          "district_average": 1.0,
+          "ranking": [
+            {
+              "school_id": "string",
+              "school_name": "string",
+              "score": 1.0
+            }
+          ],
+          "snapshot_updated_at": "string"
+        }
+      },
+      "ReportGenerateData": {
+        "type": "object",
+        "required": [
+          "report_id",
+          "status",
+          "poll_url"
+        ],
+        "properties": {
+          "report_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "poll_url": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "report_id": "string",
+          "status": "string",
+          "poll_url": "string"
+        }
+      },
+      "ReportStatusData": {
+        "type": "object",
+        "required": [
+          "report_id",
+          "status",
+          "scope_level",
+          "scope_id",
+          "format",
+          "created_at"
+        ],
+        "properties": {
+          "report_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "scope_level": {
+            "type": "string"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "download_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "example": {
+          "report_id": "string",
+          "status": "string",
+          "scope_level": "string",
+          "scope_id": "string",
+          "format": "string",
+          "created_at": "string"
+        }
+      },
+      "ApiSuccessEnvelopeHealth": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/HealthData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "status": "string"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeTokenPair": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/TokenPair"
+          }
+        },
+        "examples": [
+          {
+            "ok": true,
+            "data": {
+              "access_token": "access.jwt.token",
+              "refresh_token": "refresh.jwt.token",
+              "token_type": "bearer",
+              "expires_in_seconds": 900
+            }
+          }
+        ]
+      },
+      "ApiSuccessEnvelopeLoginResult": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/LoginResultData"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeAuthStatus": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/AuthStatusData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "status": "string",
+            "sessions_terminated": 0
+          }
+        }
+      },
+      "ApiSuccessEnvelopeForgotPassword": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ForgotPasswordAcceptedData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "status": "accepted",
+            "message": "string"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeFirstPasswordChange": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/FirstPasswordChangeData"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeProvisionAccount": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ProvisionAccountData"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeLoginMethods": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/LoginMethodsData"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeUser": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "examples": [
+          {
+            "ok": true,
+            "data": {
+              "id": "usr_teacher_001",
+              "school_id": "sch_001",
+              "role": "teacher",
+              "full_name": "Amina Teacher",
+              "login": "amina.teacher.7a.12",
+              "email": "amina.teacher@school.local",
+              "phone": null,
+              "status": "active",
+              "language": "ru",
+              "avatar_url": null,
+              "login_methods": [
+                "password"
+              ],
+              "teacher_classes": [
+                {
+                  "class_id": "class_7a",
+                  "class_name": "7A"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "ApiSuccessEnvelopeSchoolUsers": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/SchoolUsersResponseData"
+          }
+        },
+        "examples": [
+          {
+            "ok": true,
+            "data": {
+              "school_id": "sch_001",
+              "users": [
+                {
+                  "id": "usr_student_001",
+                  "school_id": "sch_001",
+                  "role": "student",
+                  "full_name": "Student One",
+                  "login": "student.one.7a.12",
+                  "email": null,
+                  "phone": "+998900000001",
+                  "status": "active",
+                  "language": "ru",
+                  "avatar_url": null,
+                  "login_methods": [
+                    "password"
+                  ],
+                  "teacher_classes": null
+                }
+              ],
+              "total_in_scope": 120,
+              "filtered_total": 1,
+              "role": "student",
+              "status": "active",
+              "class_id": "class_7a",
+              "search": "student"
+            }
+          }
+        ]
+      },
+      "ApiSuccessEnvelopeClassInvite": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ClassInviteResponseData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "class_id": "string",
+            "code": "string",
+            "expires_at": "string"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeTelegramAuth": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/TelegramAuthResultData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "access_token": "string",
+            "refresh_token": "string",
+            "token_type": "bearer",
+            "expires_in_seconds": 1
+          }
+        }
+      },
+      "ApiSuccessEnvelopeTestCreate": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/TestCreateData"
+          }
+        },
+        "examples": [
+          {
+            "ok": true,
+            "data": {
+              "id": "tst_9f3a12b001",
+              "title": "Algebra Midterm",
+              "subject": "math",
+              "school_id": "sch_001",
+              "teacher_id": "usr_teacher_001",
+              "mode": "standard",
+              "status": "draft",
+              "questions_count": 20
+            }
+          }
+        ]
+      },
+      "ApiSuccessEnvelopeTestDetails": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/TestDetailsData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "id": "string",
+            "title": "string",
+            "subject": "string",
+            "school_id": "string",
+            "teacher_id": "string",
+            "mode": "string",
+            "status": "string",
+            "show_answers": "string",
+            "questions": [
+              {
+                "question_id": "string",
+                "text": "string",
+                "topic": "string",
+                "points": 0,
+                "answers": [
+                  {
+                    "answer_id": "string",
+                    "text": "string"
+                  }
+                ]
+              }
+            ],
+            "assignment": {
+              "assignment_id": "string",
+              "deadline": "string",
+              "status": "string"
+            }
+          }
+        }
+      },
+      "ApiSuccessEnvelopeAssignTest": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/AssignTestData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "test_id": "string",
+            "assignments_created": [
+              {
+                "assignment_id": "string",
+                "class_id": "string",
+                "deadline": "string",
+                "status": "string"
+              }
+            ]
+          }
+        }
+      },
+      "ApiSuccessEnvelopeStartSession": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/StartSessionData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "session_id": "string",
+            "assignment_id": "string",
+            "status": "string",
+            "expires_at": "string",
+            "question_order": [
+              "string"
+            ],
+            "answer_shuffles": {
+              "key": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "ApiSuccessEnvelopeSubmitAnswers": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/SubmitAnswersData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "session_id": "string",
+            "answers_saved": 0,
+            "total_answered": 0,
+            "status": "string"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeFinishSession": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/FinishSessionData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "session_id": "string",
+            "assignment_id": "string",
+            "status": "string",
+            "score_percent": 1.0,
+            "total_questions": 0,
+            "answered_questions": 0,
+            "correct_answers": 0,
+            "late_submission": true,
+            "topic_breakdown": [
+              {
+                "topic": "arithmetic",
+                "total_questions": 1,
+                "answered_questions": 1,
+                "correct_answers": 1,
+                "score_percent": 100
+              }
+            ]
+          }
+        }
+      },
+      "ApiSuccessEnvelopeOfflineBundle": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/OfflineBundleData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "test_id": "string",
+            "mode": "string",
+            "expires_at": "string",
+            "questions": [
+              {
+                "question_id": "string",
+                "text": "string",
+                "topic": "string",
+                "answers": [
+                  {
+                    "answer_id": "string",
+                    "text": "string"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "ApiSuccessEnvelopeSyncSession": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/SyncSessionData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "session_id": "string",
+            "synced_answers": 0,
+            "total_answered": 0,
+            "late_submission": true,
+            "status": "string"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeTeacherDashboard": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/TeacherDashboardData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "teacher_id": "string",
+            "school_id": "string",
+            "period": "string",
+            "class_average": 1.0,
+            "completed_sessions": 0,
+            "weak_topics": [
+              {
+                "key": "value"
+              }
+            ],
+            "snapshot_updated_at": "string"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeDirectorDashboard": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/DirectorDashboardData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "director_id": "string",
+            "school_id": "string",
+            "period": "string",
+            "school_average": 1.0,
+            "active_teachers_rate": 1.0,
+            "conversion_trigger": true,
+            "snapshot_updated_at": "string"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeInspectorDashboard": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/InspectorDashboardData"
+          }
+        },
+        "example": {
+          "ok": true,
+          "data": {
+            "inspector_id": "string",
+            "district_id": "string",
+            "period": "string",
+            "schools_total": 0,
+            "schools_with_data": 0,
+            "district_average": 1.0,
+            "ranking": [
+              {
+                "school_id": "string",
+                "school_name": "string",
+                "score": 1.0
+              }
+            ],
+            "snapshot_updated_at": "string"
+          }
+        }
+      },
+      "ApiSuccessEnvelopeReportGenerate": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ReportGenerateData"
+          }
+        },
+        "examples": [
+          {
+            "ok": true,
+            "data": {
+              "report_id": "rpt_d2e5f9a22c11",
+              "status": "queued",
+              "poll_url": "/reports/rpt_d2e5f9a22c11/status"
+            }
+          }
+        ]
+      },
+      "ApiSuccessEnvelopeReportStatus": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ReportStatusData"
+          }
+        },
+        "examples": [
+          {
+            "ok": true,
+            "data": {
+              "report_id": "rpt_d2e5f9a22c11",
+              "status": "completed",
+              "scope_level": "school",
+              "scope_id": "sch_001",
+              "format": "pdf",
+              "created_at": "2026-02-28T10:00:00+00:00",
+              "started_at": "2026-02-28T10:00:05+00:00",
+              "completed_at": "2026-02-28T10:00:30+00:00",
+              "expires_at": "2026-03-07T10:00:30+00:00",
+              "download_url": "/reports/rpt_d2e5f9a22c11/download",
+              "error_code": null
+            }
+          }
+        ]
+      },
+      "AuthLoginRequest": {
+        "type": "object",
+        "required": [
+          "login",
+          "password"
+        ],
+        "properties": {
+          "login": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "login": "teacher.a.schoola.1",
+          "password": "teacher-pass"
+        }
+      },
+      "AuthTelegramRequest": {
+        "type": "object",
+        "required": [
+          "auth_data"
+        ],
+        "properties": {
+          "auth_data": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "example": {
+          "auth_data": {
+            "id": "123456",
+            "first_name": "Ali",
+            "auth_date": "1700000000",
+            "hash": "telegram_hash"
+          }
+        }
+      },
+      "AuthRefreshRequest": {
+        "type": "object",
+        "properties": {
+          "refresh_token": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "refresh_token": "refresh.jwt.token"
+        }
+      },
+      "AuthLogoutRequest": {
+        "type": "object",
+        "properties": {
+          "refresh_token": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "refresh_token": "refresh.jwt.token"
+        }
+      },
+      "AuthFirstPasswordChangeRequest": {
+        "type": "object",
+        "required": [
+          "challenge_token",
+          "new_password",
+          "repeat_password"
+        ],
+        "properties": {
+          "challenge_token": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          },
+          "repeat_password": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "challenge_token": "pwd_abc123",
+          "new_password": "student-pass-1",
+          "repeat_password": "student-pass-1"
+        }
+      },
+      "AuthForgotPasswordRequest": {
+        "type": "object",
+        "required": [
+          "login"
+        ],
+        "properties": {
+          "login": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "login": "teacher.a.schoola.1"
+        }
+      },
+      "UsersProvisionRequest": {
+        "type": "object",
+        "required": [
+          "role",
+          "full_name"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "school_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "district_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "class_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "class_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "example": {
+          "role": "student",
+          "full_name": "Ali Karimov",
+          "class_id": "cls_A_7A"
+        }
+      },
+      "UsersPatchMeRequest": {
+        "type": "object",
+        "properties": {
+          "full_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "avatar_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "example": {
+          "full_name": "Teacher A Updated",
+          "language": "ru"
+        }
+      },
+      "SchoolUserPatchRequest": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "status": "inactive"
+        }
+      },
+      "TestsCreateRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "show_answers": {
+            "type": "string"
+          },
+          "shuffle_questions": {
+            "type": "boolean"
+          },
+          "shuffle_answers": {
+            "type": "boolean"
+          },
+          "time_limit_minutes": {
+            "type": "integer"
+          },
+          "allow_retakes": {
+            "type": "boolean"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "question_id",
+                "text",
+                "topic",
+                "answers"
+              ],
+              "properties": {
+                "question_id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "topic": {
+                  "type": "string"
+                },
+                "points": {
+                  "type": "integer"
+                },
+                "answers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "answer_id",
+                      "text"
+                    ],
+                    "properties": {
+                      "answer_id": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "is_correct": {
+                        "type": "boolean"
+                      },
+                      "explanation": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "school_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "example": {
+          "title": "Physics Weekly",
+          "subject": "physics",
+          "mode": "standard",
+          "status": "published",
+          "questions": [
+            {
+              "question_id": "q1",
+              "text": "2+2",
+              "topic": "arithmetic",
+              "answers": [
+                {
+                  "answer_id": "a1",
+                  "text": "4",
+                  "is_correct": true
+                },
+                {
+                  "answer_id": "a2",
+                  "text": "5",
+                  "is_correct": false
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "TestsAssignRequest": {
+        "type": "object",
+        "required": [
+          "assignments"
+        ],
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "class_id",
+                "deadline"
+              ],
+              "properties": {
+                "class_id": {
+                  "type": "string"
+                },
+                "deadline": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "example": {
+          "assignments": [
+            {
+              "class_id": "cls_A_7A",
+              "deadline": "2026-03-01T12:00:00+00:00"
+            }
+          ]
+        }
+      },
+      "TestsStartSessionRequest": {
+        "type": "object",
+        "required": [
+          "assignment_id"
+        ],
+        "properties": {
+          "assignment_id": {
+            "type": "string"
+          },
+          "offline_mode": {
+            "type": "boolean"
+          }
+        },
+        "example": {
+          "assignment_id": "asgn_123",
+          "offline_mode": false
+        }
+      },
+      "SessionAnswerItemRequest": {
+        "type": "object",
+        "required": [
+          "question_id",
+          "answered_at"
+        ],
+        "properties": {
+          "question_id": {
+            "type": "string"
+          },
+          "answer_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "answered_at": {
+            "type": "string"
+          },
+          "time_spent_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      },
+      "SessionsSubmitAnswersRequest": {
+        "type": "object",
+        "required": [
+          "answers"
+        ],
+        "properties": {
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionAnswerItemRequest"
+            }
+          }
+        },
+        "example": {
+          "answers": [
+            {
+              "question_id": "q1",
+              "answer_id": "a1",
+              "answered_at": "2026-03-01T10:01:00+00:00"
+            }
+          ]
+        }
+      },
+      "SessionsFinishRequest": {
+        "type": "object",
+        "required": [
+          "final_answers"
+        ],
+        "properties": {
+          "final_answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionAnswerItemRequest"
+            }
+          }
+        },
+        "example": {
+          "final_answers": []
+        }
+      },
+      "ReportsGenerateRequest": {
+        "type": "object",
+        "required": [
+          "scope_level",
+          "scope_id",
+          "template_key"
+        ],
+        "properties": {
+          "scope_level": {
+            "type": "string"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "template_key": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "example": {
+          "scope_level": "district",
+          "scope_id": "district_X",
+          "template_key": "roono_summary_pdf",
+          "format": "pdf",
+          "params": {
+            "period": "Q1_2026"
+          }
+        }
+      },
+      "ClassResultStudentData": {
+        "type": "object",
+        "required": [
+          "student_id",
+          "student_name",
+          "status",
+          "answered_questions",
+          "total_questions",
+          "correct_answers",
+          "late_submission"
+        ],
+        "properties": {
+          "student_id": {
+            "type": "string"
+          },
+          "student_name": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "score_percent": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "answered_questions": {
+            "type": "integer"
+          },
+          "total_questions": {
+            "type": "integer"
+          },
+          "correct_answers": {
+            "type": "integer"
+          },
+          "late_submission": {
+            "type": "boolean"
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "example": {
+          "student_id": "usr_student_001",
+          "student_name": "Student One",
+          "session_id": "sess_001",
+          "status": "completed",
+          "score_percent": 100.0,
+          "answered_questions": 20,
+          "total_questions": 20,
+          "correct_answers": 20,
+          "late_submission": false,
+          "completed_at": "2026-03-01T10:20:00+00:00"
+        }
+      },
+      "ClassResultsData": {
+        "type": "object",
+        "required": [
+          "test_id",
+          "class_id",
+          "total_students",
+          "sessions_total",
+          "completed_sessions",
+          "average_score",
+          "students"
+        ],
+        "properties": {
+          "test_id": {
+            "type": "string"
+          },
+          "class_id": {
+            "type": "string"
+          },
+          "total_students": {
+            "type": "integer"
+          },
+          "sessions_total": {
+            "type": "integer"
+          },
+          "completed_sessions": {
+            "type": "integer"
+          },
+          "average_score": {
+            "type": "number"
+          },
+          "students": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClassResultStudentData"
+            }
+          }
+        },
+        "example": {
+          "test_id": "tst_001",
+          "class_id": "cls_A_7A",
+          "total_students": 28,
+          "sessions_total": 21,
+          "completed_sessions": 20,
+          "average_score": 74.5,
+          "students": []
+        }
+      },
+      "ApiSuccessEnvelopeClassResults": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ClassResultsData"
+          }
+        },
+        "examples": [
+          {
+            "ok": true,
+            "data": {
+              "test_id": "tst_001",
+              "class_id": "cls_A_7A",
+              "total_students": 28,
+              "sessions_total": 21,
+              "completed_sessions": 20,
+              "average_score": 74.5,
+              "students": [
+                {
+                  "student_id": "usr_student_001",
+                  "student_name": "Student One",
+                  "session_id": "sess_001",
+                  "status": "completed",
+                  "score_percent": 90.0,
+                  "answered_questions": 18,
+                  "total_questions": 20,
+                  "correct_answers": 18,
+                  "late_submission": false,
+                  "completed_at": "2026-03-01T10:20:00+00:00"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

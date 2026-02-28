@@ -131,7 +131,7 @@ ALTER TABLE schools ADD CONSTRAINT chk_schools_plan_dates
 | `phone_verified` | `BOOLEAN` | NOT NULL | `FALSE` | Верификация телефона через SMS |
 | `password_hash` | `VARCHAR(255)` | NULL | — | bcrypt hash (cost 12). NULL если вход только через Telegram |
 | `telegram_id` | `BIGINT` | NULL | — | Telegram User ID. Уникален глобально (если не NULL) |
-| `telegram_username` | `VARCHAR(100)` | NULL | — | @username в Telegram (без @) |
+| `telegram_profile_name` | `VARCHAR(100)` | NULL | — | Отображаемое имя профиля Telegram |
 | `avatar_url` | `TEXT` | NULL | — | URL аватарки на CDN |
 | `language` | `VARCHAR(5)` | NOT NULL | `'uz'` | Предпочитаемый язык: `uz` / `ru` |
 | `status` | `VARCHAR(20)` | NOT NULL | `'active'` | `active` / `inactive` / `blocked` |
