@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from app.repositories.runtime import get_data_store
-from conftest import login_director, login_student, login_teacher
+from conftest import login_director, login_inspector, login_student, login_teacher
 
 
 def _auth_header(token: str) -> dict[str, str]:
@@ -51,7 +51,34 @@ def test_telegram_onboarding_register_flow(client: TestClient) -> None:
         },
     )
     assert register.status_code == 201
-    assert register.json()["role"] == "teacher"
+    register_body = register.json()
+    assert register_body["role"] == "teacher"
+    assert register_body["status"] == "pending_approval"
+    assert register_body["access_token"] is None
+
+    login_pending = client.post(
+        "/auth/login",
+        json={"email": "newteacher@school.uz", "password": "newteacher-pass"},
+    )
+    assert login_pending.status_code == 403
+    assert login_pending.json()["error"]["code"] == "ACCOUNT_PENDING_APPROVAL"
+
+    director = login_director(client)
+    director_auth = _auth_header(director["access_token"])
+    activate = client.patch(
+        f"/schools/school_A/users/{register_body['user_id']}",
+        headers=director_auth,
+        json={"status": "active"},
+    )
+    assert activate.status_code == 200
+    assert activate.json()["status"] == "active"
+
+    login_approved = client.post(
+        "/auth/login",
+        json={"email": "newteacher@school.uz", "password": "newteacher-pass"},
+    )
+    assert login_approved.status_code == 200
+    assert "access_token" in login_approved.json()
 
     register_reuse = client.post(
         "/users/register",
@@ -298,3 +325,107 @@ def test_invite_accept_class_limit_reached(client: TestClient) -> None:
     )
     assert limit_response.status_code == 403
     assert limit_response.json()["error"]["code"] == "CLASS_LIMIT_REACHED"
+
+
+def test_inspector_dashboard_and_reports_status_download_flow(client: TestClient) -> None:
+    teacher = login_teacher(client)
+    teacher_auth = _auth_header(teacher["access_token"])
+
+    create_test = client.post(
+        "/tests",
+        headers=teacher_auth,
+        json={
+            "title": "Inspector Seed Test",
+            "subject": "physics",
+            "mode": "standard",
+            "status": "published",
+            "questions": [
+                {
+                    "question_id": "q_i_1",
+                    "text": "1+1",
+                    "topic": "arithmetic",
+                    "answers": [
+                        {"answer_id": "a_i_1", "text": "2", "is_correct": True},
+                        {"answer_id": "a_i_2", "text": "3", "is_correct": False},
+                    ],
+                }
+            ],
+        },
+    )
+    assert create_test.status_code == 201
+    test_id = create_test.json()["id"]
+    deadline = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    assign = client.post(
+        f"/tests/{test_id}/assign",
+        headers=teacher_auth,
+        json={"assignments": [{"class_id": "cls_A_7A", "deadline": deadline}]},
+    )
+    assert assign.status_code == 201
+    assignment_id = assign.json()["assignments_created"][0]["assignment_id"]
+
+    student = login_student(client)
+    student_auth = _auth_header(student["access_token"])
+    start = client.post(
+        f"/tests/{test_id}/sessions",
+        headers=student_auth,
+        json={"assignment_id": assignment_id, "offline_mode": False},
+    )
+    assert start.status_code == 201
+    session_id = start.json()["session_id"]
+    submit = client.post(
+        f"/sessions/{session_id}/answers",
+        headers=student_auth,
+        json={"answers": [{"question_id": "q_i_1", "answer_id": "a_i_1", "answered_at": datetime.now(timezone.utc).isoformat()}]},
+    )
+    assert submit.status_code == 200
+    finish = client.post(f"/sessions/{session_id}/finish", headers=student_auth, json={"final_answers": []})
+    assert finish.status_code == 200
+
+    inspector = login_inspector(client)
+    inspector_auth = _auth_header(inspector["access_token"])
+
+    inspector_dashboard = client.get(
+        "/analytics/inspector/dashboard",
+        headers=inspector_auth,
+        params={"district_id": "district_X", "period": "quarter"},
+    )
+    assert inspector_dashboard.status_code == 200
+    payload = inspector_dashboard.json()
+    assert payload["district_id"] == "district_X"
+    assert payload["schools_total"] >= 1
+
+    foreign_dashboard = client.get(
+        "/analytics/inspector/dashboard",
+        headers=inspector_auth,
+        params={"district_id": "district_Y"},
+    )
+    assert foreign_dashboard.status_code == 403
+
+    generate = client.post(
+        "/reports/generate",
+        headers=inspector_auth,
+        json={
+            "scope_level": "district",
+            "scope_id": "district_X",
+            "template_key": "roono_summary_pdf",
+            "format": "pdf",
+            "params": {"period": "Q1_2026"},
+        },
+    )
+    assert generate.status_code == 202
+    report_id = generate.json()["report_id"]
+
+    download_not_ready = client.get(f"/reports/{report_id}/download", headers=inspector_auth, follow_redirects=False)
+    assert download_not_ready.status_code == 409
+
+    status_processing = client.get(f"/reports/{report_id}/status", headers=inspector_auth)
+    assert status_processing.status_code == 200
+    assert status_processing.json()["status"] in {"processing", "completed"}
+
+    status_completed = client.get(f"/reports/{report_id}/status", headers=inspector_auth)
+    assert status_completed.status_code == 200
+    assert status_completed.json()["status"] == "completed"
+
+    download_ready = client.get(f"/reports/{report_id}/download", headers=inspector_auth, follow_redirects=False)
+    assert download_ready.status_code == 302
+    assert "location" in download_ready.headers

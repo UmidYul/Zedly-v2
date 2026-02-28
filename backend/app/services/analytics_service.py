@@ -238,5 +238,50 @@ class AnalyticsService:
             "snapshot_updated_at": (average_snapshot.updated_at if average_snapshot else _now()).isoformat(),
         }
 
+    def inspector_dashboard(self, *, current_user: User, period: str, district_id: str | None = None) -> dict[str, Any]:
+        if current_user.role != Role.INSPECTOR:
+            raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Only inspector can access inspector dashboard")
+
+        effective_district_id = district_id or current_user.district_id
+        if not effective_district_id:
+            raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="district_id is required")
+        if current_user.district_id and effective_district_id != current_user.district_id:
+            raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Inspector cannot access another district")
+
+        try:
+            data_store = get_data_store()
+            schools = [school for school in data_store.list_schools() if school.district_id == effective_district_id]
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+
+        ranking: list[dict[str, Any]] = []
+        updated_at = _now()
+        for school in schools:
+            snapshot = data_store.get_latest_snapshot(
+                school_id=school.id,
+                entity_type="school",
+                entity_id=school.id,
+                metric_name="school_average",
+            )
+            if not snapshot:
+                continue
+            score = float((snapshot.value_json or {}).get("value", 0.0))
+            ranking.append({"school_id": school.id, "school_name": school.name, "score": score})
+            if snapshot.updated_at > updated_at:
+                updated_at = snapshot.updated_at
+
+        ranking.sort(key=lambda item: item["score"], reverse=True)
+        district_average = round(sum(item["score"] for item in ranking) / len(ranking), 2) if ranking else 0.0
+        return {
+            "inspector_id": current_user.id,
+            "district_id": effective_district_id,
+            "period": period,
+            "schools_total": len(schools),
+            "schools_with_data": len(ranking),
+            "district_average": district_average,
+            "ranking": ranking,
+            "snapshot_updated_at": updated_at.isoformat(),
+        }
+
 
 service = AnalyticsService()

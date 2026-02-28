@@ -9,6 +9,7 @@ from app.core.types import Role, UserStatus
 from app.repositories.models import (
     AnalyticsSnapshot,
     InviteCode,
+    ReportJob,
     RefreshRecord,
     School,
     SchoolClass,
@@ -26,8 +27,8 @@ from app.repositories.models import (
 class InMemoryStore:
     def __init__(self) -> None:
         self.schools: dict[str, School] = {
-            "school_A": School(id="school_A", name="School A", subscription_plan="freemium"),
-            "school_B": School(id="school_B", name="School B", subscription_plan="standard"),
+            "school_A": School(id="school_A", name="School A", subscription_plan="freemium", district_id="district_X"),
+            "school_B": School(id="school_B", name="School B", subscription_plan="standard", district_id="district_Y"),
         }
 
         self.users: dict[str, User] = {}
@@ -36,6 +37,7 @@ class InMemoryStore:
         self.test_sessions: dict[str, TestSessionResource] = {}
         self.session_answers: dict[str, dict[str, SessionAnswer]] = {}
         self.analytics_snapshots: dict[str, AnalyticsSnapshot] = {}
+        self.report_jobs: dict[str, ReportJob] = {}
         self.teacher_subjects: dict[str, set[str]] = {}
         self.teacher_class_assignments: dict[str, set[tuple[str, str]]] = {}
         self.student_class_enrollments: dict[str, str] = {}

@@ -17,6 +17,7 @@ from app.schemas.users import (
     PatchMeRequest,
     RegisterUserRequest,
     RegisterUserResponse,
+    SchoolUserPatchRequest,
     SchoolUsersResponse,
     UserResponse,
 )
@@ -31,7 +32,7 @@ router = APIRouter(tags=["users"])
 def register_user(payload: RegisterUserRequest, request: Request) -> RegisterUserResponse:
     if payload.role != "teacher":
         raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="Only teacher registration is supported")
-    user, pair = auth_service.register_teacher(
+    user = auth_service.register_teacher(
         full_name=payload.full_name,
         email=payload.email,
         password=payload.password,
@@ -45,10 +46,8 @@ def register_user(payload: RegisterUserRequest, request: Request) -> RegisterUse
         user_id=user.id,
         role=user.role.value,
         school_id=user.school_id,
-        access_token=pair.access_token,
-        refresh_token=pair.refresh_token,
-        token_type="bearer",
-        expires_in_seconds=900,
+        status=user.status.value,
+        message="Registration submitted. Wait for school approval.",
     )
 
 
@@ -126,4 +125,33 @@ def invite_class(
         class_id=class_id,
         code=school_class.code,
         expires_at=school_class.expires_at.isoformat(),
+    )
+
+
+@router.patch("/schools/{school_id}/users/{user_id}", response_model=UserResponse)
+def patch_school_user(
+    school_id: str,
+    user_id: str,
+    payload: SchoolUserPatchRequest,
+    request: Request,
+    auth: AuthContext = Depends(require_permission("manage_school_users")),
+) -> UserResponse:
+    enforce_school_scope(auth=auth, target_school_id=school_id, resource_id=user_id, request=request)
+    updated = users_service.update_school_user_status(
+        current_user=auth.user,
+        school_id=school_id,
+        user_id=user_id,
+        status=payload.status,
+    )
+    audit_trail(event="users.school.patch", auth=auth, resource_id=user_id, request=request, details={"status": updated.status.value})
+    return UserResponse(
+        id=updated.id,
+        school_id=updated.school_id,
+        role=updated.role.value,
+        full_name=updated.full_name,
+        email=updated.email,
+        phone=updated.phone,
+        telegram_id=updated.telegram_id,
+        status=updated.status.value,
+        language=updated.language,
     )

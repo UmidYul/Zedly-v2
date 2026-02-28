@@ -6,7 +6,7 @@ from datetime import timedelta
 from app.core.constants import INVITE_TTL_HOURS
 from app.core.errors import AppError
 from app.core.security import generate_code, now_utc
-from app.core.types import ErrorCode, Role
+from app.core.types import ErrorCode, Role, UserStatus
 from app.repositories.exceptions import BackendUnavailableError
 from app.repositories.models import InviteCode, TestResource, User
 from app.repositories.runtime import get_data_store
@@ -121,6 +121,40 @@ class UsersService:
         except BackendUnavailableError as exc:
             raise _service_unavailable() from exc
         return invite
+
+    def update_school_user_status(self, *, current_user: User, school_id: str, user_id: str, status: str) -> User:
+        if current_user.role != Role.DIRECTOR:
+            raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Only director can update school users")
+        if current_user.school_id != school_id:
+            raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Cross-school access denied")
+
+        normalized_status = status.strip().lower()
+        if normalized_status not in {"active", "inactive", "pending_approval"}:
+            raise AppError(status_code=400, code=ErrorCode.VALIDATION_ERROR.value, message="Unsupported status value")
+
+        try:
+            data_store = get_data_store()
+            target_user = data_store.get_user_by_id(user_id)
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+        if not target_user:
+            raise AppError(status_code=404, code=ErrorCode.RESOURCE_NOT_FOUND.value, message="User not found")
+        if target_user.school_id != school_id:
+            raise AppError(status_code=403, code=ErrorCode.SCHOOL_ACCESS_FORBIDDEN.value, message="Cross-school access denied")
+        if target_user.role not in (Role.TEACHER, Role.STUDENT, Role.PSYCHOLOGIST, Role.PARENT):
+            raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Cannot update this role")
+
+        status_map = {
+            "active": UserStatus.ACTIVE,
+            "inactive": UserStatus.INACTIVE,
+            "pending_approval": UserStatus.PENDING_APPROVAL,
+        }
+        target_user.status = status_map[normalized_status]
+        try:
+            data_store.save_user(target_user)
+        except BackendUnavailableError as exc:
+            raise _service_unavailable() from exc
+        return target_user
 
     def create_test(self, *, current_user: User, title: str, mode: str) -> TestResource:
         if current_user.role != Role.TEACHER:

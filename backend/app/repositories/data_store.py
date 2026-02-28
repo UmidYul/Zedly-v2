@@ -15,6 +15,7 @@ from app.repositories.models import (
     AnalyticsSnapshot,
     AuditEvent,
     InviteCode,
+    ReportJob,
     School,
     SessionAnswer,
     SchoolClass,
@@ -57,6 +58,10 @@ class DataStore(ABC):
 
     @abstractmethod
     def save_school(self, school: School) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def list_schools(self) -> list[School]:
         raise NotImplementedError
 
     @abstractmethod
@@ -180,6 +185,14 @@ class DataStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def save_report_job(self, job: ReportJob) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_report_job(self, report_id: str) -> ReportJob | None:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_student_class_id(self, student_id: str) -> str | None:
         raise NotImplementedError
 
@@ -226,6 +239,9 @@ class InMemoryDataStore(DataStore):
 
     def save_school(self, school: School) -> None:
         store.schools[school.id] = school
+
+    def list_schools(self) -> list[School]:
+        return list(store.schools.values())
 
     def list_users_by_school(self, school_id: str) -> list[User]:
         return [user for user in store.users.values() if user.school_id == school_id]
@@ -355,6 +371,12 @@ class InMemoryDataStore(DataStore):
         values.sort(key=lambda x: x.period_start, reverse=True)
         return values
 
+    def save_report_job(self, job: ReportJob) -> None:
+        store.report_jobs[job.id] = job
+
+    def get_report_job(self, report_id: str) -> ReportJob | None:
+        return store.report_jobs.get(report_id)
+
     def get_student_class_id(self, student_id: str) -> str | None:
         return store.student_class_enrollments.get(student_id)
 
@@ -415,6 +437,7 @@ class PostgresDataStore(DataStore):
             id=row["id"],
             name=row["name"],
             subscription_plan=row.get("subscription_plan") or "freemium",
+            district_id=row.get("district_id"),
         )
 
     def _map_class(self, row: dict | None) -> SchoolClass | None:
@@ -545,6 +568,27 @@ class PostgresDataStore(DataStore):
             updated_at=row.get("updated_at") or row["period_start"],
         )
 
+    def _map_report_job(self, row: dict | None) -> ReportJob | None:
+        if not row:
+            return None
+        return ReportJob(
+            id=row["id"],
+            school_id=row.get("school_id"),
+            requested_by_user_id=row["requested_by_user_id"],
+            scope_level=row["scope_level"],
+            scope_id=row["scope_id"],
+            template_key=row["template_key"],
+            format=row["format"],
+            status=row.get("status") or "queued",
+            params_json=dict(row.get("params_json") or {}),
+            result_url=row.get("result_url"),
+            expires_at=row.get("expires_at"),
+            error_code=row.get("error_code"),
+            created_at=row.get("created_at"),
+            started_at=row.get("started_at"),
+            completed_at=row.get("completed_at"),
+        )
+
     def _request_context(self) -> RequestRlsContext:
         current = get_request_rls_context()
         if current is not None:
@@ -657,14 +701,21 @@ class PostgresDataStore(DataStore):
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO schools (id, name, subscription_plan)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO schools (id, name, subscription_plan, district_id)
+                    VALUES (%s, %s, %s, %s)
                     ON CONFLICT (id) DO UPDATE SET
                       name = EXCLUDED.name,
-                      subscription_plan = EXCLUDED.subscription_plan
+                      subscription_plan = EXCLUDED.subscription_plan,
+                      district_id = EXCLUDED.district_id
                     """,
-                    (school.id, school.name, school.subscription_plan),
+                    (school.id, school.name, school.subscription_plan, school.district_id),
                 )
+
+    def list_schools(self) -> list[School]:
+        with self._connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM schools ORDER BY id")
+                return [self._map_school(row) for row in cur.fetchall() if row is not None]
 
     def list_users_by_school(self, school_id: str) -> list[User]:
         with self._connection() as conn:
@@ -1142,6 +1193,56 @@ class PostgresDataStore(DataStore):
                         (school_id, entity_type, entity_id),
                     )
                 return [self._map_snapshot(row) for row in cur.fetchall() if row is not None]
+
+    def save_report_job(self, job: ReportJob) -> None:
+        with self._connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO report_jobs (
+                        id, school_id, requested_by_user_id, scope_level, scope_id, template_key, format, status,
+                        params_json, result_url, expires_at, error_code, created_at, started_at, completed_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        school_id = EXCLUDED.school_id,
+                        requested_by_user_id = EXCLUDED.requested_by_user_id,
+                        scope_level = EXCLUDED.scope_level,
+                        scope_id = EXCLUDED.scope_id,
+                        template_key = EXCLUDED.template_key,
+                        format = EXCLUDED.format,
+                        status = EXCLUDED.status,
+                        params_json = EXCLUDED.params_json,
+                        result_url = EXCLUDED.result_url,
+                        expires_at = EXCLUDED.expires_at,
+                        error_code = EXCLUDED.error_code,
+                        started_at = EXCLUDED.started_at,
+                        completed_at = EXCLUDED.completed_at
+                    """,
+                    (
+                        job.id,
+                        job.school_id,
+                        job.requested_by_user_id,
+                        job.scope_level,
+                        job.scope_id,
+                        job.template_key,
+                        job.format,
+                        job.status,
+                        json.dumps(job.params_json or {}),
+                        job.result_url,
+                        job.expires_at,
+                        job.error_code,
+                        job.created_at,
+                        job.started_at,
+                        job.completed_at,
+                    ),
+                )
+
+    def get_report_job(self, report_id: str) -> ReportJob | None:
+        with self._connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM report_jobs WHERE id = %s LIMIT 1", (report_id,))
+                return self._map_report_job(cur.fetchone())
 
     def get_student_class_id(self, student_id: str) -> str | None:
         with self._connection() as conn:

@@ -51,3 +51,12 @@ def login_director(client: TestClient) -> dict:
     )
     assert response.status_code == 200
     return response.json()
+
+
+def login_inspector(client: TestClient) -> dict:
+    response = client.post(
+        "/auth/login",
+        json={"email": "inspector@district.uz", "password": "inspector-pass"},
+    )
+    assert response.status_code == 200
+    return response.json()

@@ -38,6 +38,7 @@ class School:
     id: str
     name: str
     subscription_plan: str = "freemium"
+    district_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -169,6 +170,25 @@ class AnalyticsSnapshot:
     period_start: datetime
     value_json: dict[str, Any]
     updated_at: datetime = field(default_factory=now_utc)
+
+
+@dataclass(slots=True)
+class ReportJob:
+    id: str
+    requested_by_user_id: str
+    scope_level: str
+    scope_id: str
+    template_key: str
+    format: str
+    params_json: dict[str, Any] = field(default_factory=dict)
+    school_id: str | None = None
+    status: str = "queued"
+    result_url: str | None = None
+    expires_at: datetime | None = None
+    error_code: str | None = None
+    created_at: datetime = field(default_factory=now_utc)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 @dataclass(slots=True)

@@ -4,7 +4,8 @@
 CREATE TABLE IF NOT EXISTS schools (
   id VARCHAR(50) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
-  subscription_plan VARCHAR(32) NOT NULL DEFAULT 'freemium'
+  subscription_plan VARCHAR(32) NOT NULL DEFAULT 'freemium',
+  district_id VARCHAR(50) NULL
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -150,6 +151,26 @@ CREATE TABLE IF NOT EXISTS analytics_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_analytics_snapshots_school ON analytics_snapshots(school_id, entity_type, period_start DESC);
 
+CREATE TABLE IF NOT EXISTS report_jobs (
+  id VARCHAR(50) PRIMARY KEY,
+  school_id VARCHAR(50) NULL REFERENCES schools(id) ON DELETE SET NULL,
+  requested_by_user_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  scope_level VARCHAR(20) NOT NULL,
+  scope_id VARCHAR(50) NOT NULL,
+  template_key VARCHAR(100) NOT NULL,
+  format VARCHAR(10) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'queued',
+  params_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  result_url TEXT NULL,
+  expires_at TIMESTAMPTZ NULL,
+  error_code VARCHAR(50) NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ NULL,
+  completed_at TIMESTAMPTZ NULL
+);
+CREATE INDEX IF NOT EXISTS idx_report_jobs_status_created ON report_jobs(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_report_jobs_requested_by ON report_jobs(requested_by_user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS invite_codes (
   code VARCHAR(50) PRIMARY KEY,
   school_id VARCHAR(50) NOT NULL REFERENCES schools(id) ON DELETE RESTRICT,
@@ -177,9 +198,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_school_time ON audit_logs(school_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_event_time ON audit_logs(event_type, created_at DESC);
 
-INSERT INTO schools (id, name, subscription_plan) VALUES
-  ('school_A', 'School A', 'freemium'),
-  ('school_B', 'School B', 'standard')
+INSERT INTO schools (id, name, subscription_plan, district_id) VALUES
+  ('school_A', 'School A', 'freemium', 'district_X'),
+  ('school_B', 'School B', 'standard', 'district_Y')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO users (id, school_id, role, full_name, status, email, password_hash, telegram_id)

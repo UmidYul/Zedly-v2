@@ -30,6 +30,12 @@ class SchoolUsersResponse(BaseModel):
     users: list[UserResponse]
 
 
+class SchoolUserPatchRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    status: str
+
+
 class ClassInviteResponse(BaseModel):
     class_id: str
     code: str
@@ -55,8 +61,10 @@ class RegisterUserResponse(BaseModel):
     user_id: str
     role: str
     school_id: str | None
-    access_token: str
-    refresh_token: str
+    status: str
+    message: str | None = None
+    access_token: str | None = None
+    refresh_token: str | None = None
     token_type: str = "bearer"
     expires_in_seconds: int = 900
 

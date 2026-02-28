@@ -6,7 +6,7 @@ from app.core.errors import AppError
 from app.core.settings import settings
 from app.core.types import ErrorCode
 from app.middleware.chain import AuthContext, audit_trail, enforce_feature, require_permission
-from app.schemas.analytics import DirectorDashboardResponse, TeacherDashboardResponse
+from app.schemas.analytics import DirectorDashboardResponse, InspectorDashboardResponse, TeacherDashboardResponse
 from app.services.analytics_service import service as analytics_service
 
 
@@ -39,3 +39,17 @@ def director_dashboard(
     payload = analytics_service.director_dashboard(current_user=auth.user, period=period)
     audit_trail(event="analytics.director.dashboard", auth=auth, resource_id=auth.user.school_id, request=request)
     return DirectorDashboardResponse(**payload)
+
+
+@router.get("/inspector/dashboard", response_model=InspectorDashboardResponse)
+def inspector_dashboard(
+    request: Request,
+    period: str = Query(default="quarter"),
+    district_id: str | None = Query(default=None),
+    auth: AuthContext = Depends(require_permission("view_district_analytics")),
+) -> InspectorDashboardResponse:
+    if not settings.feature_analytics_snapshots_enabled:
+        raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Analytics snapshots feature is disabled")
+    payload = analytics_service.inspector_dashboard(current_user=auth.user, period=period, district_id=district_id)
+    audit_trail(event="analytics.inspector.dashboard", auth=auth, resource_id=payload["district_id"], request=request)
+    return InspectorDashboardResponse(**payload)

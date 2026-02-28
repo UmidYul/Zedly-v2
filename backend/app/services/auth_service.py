@@ -209,6 +209,11 @@ class AuthService:
         telegram_id = int(telegram_id_raw)
         user = self._find_user_by_telegram_id(telegram_id)
         if user:
+            if user.status == UserStatus.PENDING_APPROVAL:
+                return {
+                    "status": "pending_approval",
+                    "message": "Your account is pending school approval",
+                }
             self._ensure_user_active(user)
             pair = self._issue_token_pair(user)
             audit.record(event="auth.telegram.login.success", user_id=user.id, school_id=user.school_id, ip=ip)
@@ -252,7 +257,7 @@ class AuthService:
         school_name: str | None,
         onboarding_token: str | None,
         ip: str | None,
-    ) -> tuple[User, TokenPair]:
+    ) -> User:
         if onboarding_token and not settings.feature_telegram_onboarding_token_flow_enabled:
             raise AppError(status_code=403, code=ErrorCode.ROLE_FORBIDDEN.value, message="Telegram onboarding flow is disabled")
         identity = email.lower().strip()
@@ -297,7 +302,7 @@ class AuthService:
             school_id=resolved_school_id,
             role=Role.TEACHER,
             full_name=full_name,
-            status=UserStatus.ACTIVE,
+            status=UserStatus.PENDING_APPROVAL,
             email=identity,
             password_hash=hash_password(password),
             telegram_id=telegram_id,
@@ -322,7 +327,6 @@ class AuthService:
             subject_code=subject,
         )
 
-        pair = self._issue_token_pair(user)
         audit.record(
             event="auth.register.teacher.success",
             user_id=user.id,
@@ -330,7 +334,7 @@ class AuthService:
             ip=ip,
             details={"onboarding_token_used": bool(onboarding_token)},
         )
-        return user, pair
+        return user
 
     def refresh(self, *, refresh_token: str, ip: str | None) -> TokenPair:
         token_hash = hash_refresh_token(refresh_token)

@@ -397,11 +397,11 @@ Then: система извлекает текст из документа
 | `POST /tests/{test_id}/sessions` | 2 | ✅ |
 | `POST /sessions/{session_id}/answers` | 2, 5 | ✅ |
 | `POST /sessions/{session_id}/finish` | 2, 3, 5 | ✅ |
-| `GET /marketplace/tests` | AC-20 | ✅ |
-| `GET /marketplace/tests/{test_id}` | AC-20 | ✅ |
-| `POST /marketplace/tests/{test_id}/publish` | AC-20 | ✅ |
-| `POST /marketplace/tests/{test_id}/rate` | AC-20 | ✅ |
-| `POST /marketplace/tests/{test_id}/copy` | AC-20 | ✅ |
+| `GET /marketplace/tests` | AC-20 | Отложено (потом) |
+| `GET /marketplace/tests/{test_id}` | AC-20 | Отложено (потом) |
+| `POST /marketplace/tests/{test_id}/publish` | AC-20 | Отложено (потом) |
+| `POST /marketplace/tests/{test_id}/rate` | AC-20 | Отложено (потом) |
+| `POST /marketplace/tests/{test_id}/copy` | AC-20 | Отложено (потом) |
 | `GET /analytics/teacher/dashboard` | 2, 6 | ✅ |
 | `GET /analytics/director/dashboard` | 6 | ✅ |
 | `GET /analytics/inspector/dashboard` | 9, 10 | ✅ |
@@ -450,6 +450,8 @@ Then: директор видит пользователей своей школ
 ```
 
 ### AC-20: Marketplace API
+
+`Статус на текущий цикл: ОТЛОЖЕНО (потом). Реализация не входит в ближайшие спринты.`
 
 ```
 Given: учитель авторизован
@@ -501,7 +503,7 @@ Then: status отражает pending/processing/completed/failed
 | 17 | Auth lifecycle (login/refresh/logout) | P1 | Auth API, token rotation, revoke |
 | 18 | Профиль пользователя (GET/PATCH /users/me) | P1 | Users API, profile validation |
 | 19 | Пользователи школы и инвайты класса | P1 | Users API, invite flow, RBAC |
-| 20 | Marketplace API | P2 | Marketplace API, quality/rating checks |
+| 20 | Marketplace API (отложено) | Потом | Marketplace API, quality/rating checks |
 | 21 | Отчёты: status/download | P1 | Reports API, async pipeline |
 
 ---
