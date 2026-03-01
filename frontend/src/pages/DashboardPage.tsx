@@ -6,6 +6,7 @@ import { Stat } from "../components/ui/Stat";
 import { AppShell } from "../components/layout/AppShell";
 import { useAuth } from "../state/auth-context";
 import { Link } from "react-router-dom";
+import { TeacherDashboardPage } from "./teacher/Dashboard";
 
 function DirectorDashboard() {
   const latestTests = [
@@ -299,12 +300,15 @@ export function DashboardPage() {
     return null;
   }
 
+  if (session.me.role === "teacher") {
+    return <TeacherDashboardPage />;
+  }
+
   return (
     <AppShell>
       {session.me.role === "director" ? <DirectorDashboard /> : null}
-      {session.me.role === "teacher" ? <TeacherDashboard teacherClasses={session.me.teacher_classes || []} /> : null}
       {session.me.role === "student" ? <StudentDashboard fullName={session.me.full_name} /> : null}
-      {!["director", "teacher", "student"].includes(session.me.role) ? (
+      {!["director", "student"].includes(session.me.role) ? (
         <section className="content-stack">
           <Card>
             <Card.Body>

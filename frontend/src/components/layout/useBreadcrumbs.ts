@@ -16,6 +16,8 @@ const ROUTE_LABELS: Record<string, string> = {
   "class-invites": "Классы",
   analytics: "Аналитика",
   results: "Результаты",
+  tests: "Тесты",
+  new: "Новый тест",
   "tests-workbench": "Мои тесты",
   "my-tests": "Мои тесты",
   "my-results": "История",

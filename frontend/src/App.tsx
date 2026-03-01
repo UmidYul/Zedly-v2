@@ -26,6 +26,9 @@ import { SchoolUsersPage } from "./pages/SchoolUsersPage";
 import { TestResultPage } from "./pages/TestResultPage";
 import { TestSessionPage } from "./pages/TestSessionPage";
 import { TestsWorkbenchPage } from "./pages/TestsWorkbenchPage";
+import { ClassResultsPage } from "./pages/teacher/ClassResults";
+import { TestBuilderPage } from "./pages/teacher/TestBuilder";
+import { TestLibraryPage } from "./pages/teacher/TestLibrary";
 import { AdminRoute, getDefaultRouteByRole, ProtectedRoute, PublicOnlyRoute, RoleRoute } from "./router/guards";
 import { useAuth } from "./state/auth-context";
 
@@ -226,6 +229,46 @@ export default function App() {
           <ProtectedRoute>
             <RoleRoute roles={["teacher", "student"]}>
               <TestsWorkbenchPage />
+            </RoleRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tests"
+        element={
+          <ProtectedRoute>
+            <RoleRoute roles={["teacher"]}>
+              <TestLibraryPage />
+            </RoleRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tests/new"
+        element={
+          <ProtectedRoute>
+            <RoleRoute roles={["teacher"]}>
+              <TestBuilderPage />
+            </RoleRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tests/:id/edit"
+        element={
+          <ProtectedRoute>
+            <RoleRoute roles={["teacher"]}>
+              <TestBuilderPage />
+            </RoleRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/results/:testId"
+        element={
+          <ProtectedRoute>
+            <RoleRoute roles={["teacher"]}>
+              <ClassResultsPage />
             </RoleRoute>
           </ProtectedRoute>
         }

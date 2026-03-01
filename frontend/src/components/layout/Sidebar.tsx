@@ -72,7 +72,8 @@ const NAV_BY_ROLE: Record<RoleKey, NavGroup[]> = {
       title: "Рабочее место",
       items: [
         { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-        { to: "/tests-workbench", label: "Tests", icon: TestTube2 },
+        { to: "/tests", label: "Мои тесты", icon: TestTube2 },
+        { to: "/tests/new", label: "Создать тест", icon: BookOpen },
         { to: "/class-invites", label: "Class Invites", icon: GraduationCap }
       ]
     },

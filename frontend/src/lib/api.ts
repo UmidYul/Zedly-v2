@@ -51,6 +51,10 @@ export interface MeResponse {
 export interface TeacherClassRef {
   class_id: string;
   class_name: string;
+  id?: string;
+  name?: string;
+  students_count?: number;
+  last_activity?: string;
 }
 
 export interface PatchMePayload {
@@ -107,8 +111,10 @@ export interface TestQuestionInput {
 export interface TestCreatePayload {
   title: string;
   subject: string;
-  mode: "standard" | "ntt";
-  status: "draft" | "published";
+  mode?: "standard" | "ntt";
+  status?: "draft" | "published";
+  class_ids?: string[];
+  time_limit_minutes?: number | null;
   questions: TestQuestionInput[];
 }
 
@@ -131,6 +137,66 @@ export interface AssignTestResponse {
     deadline: string;
     status: string;
   }>;
+}
+
+export interface TestAssignPayload {
+  class_ids?: string[];
+  start_at?: string | null;
+  deadline_at?: string | null;
+  attempt_limit?: number | null;
+  shuffle_questions?: boolean;
+  shuffle_answers?: boolean;
+  request_id?: string;
+  assignments?: Array<{
+    class_id: string;
+    deadline: string;
+  }>;
+}
+
+export interface TeacherDashboardAnalyticsResponse {
+  active_tests_count?: number;
+  students_completed_today?: number;
+  avg_score_7d?: number;
+  tests_completed_month?: number;
+  recent_events?: Array<{
+    type?: string;
+    student_name?: string;
+    test_title?: string;
+    score?: number;
+    timestamp?: string;
+  }>;
+  classes?: Array<{
+    id?: string;
+    name?: string;
+    students_count?: number;
+    last_activity?: string;
+  }>;
+  active_tests?: Array<{
+    id?: string;
+    title?: string;
+    class_id?: string;
+    class_name?: string;
+    completed?: number;
+    total?: number;
+    completed_count?: number;
+    total_count?: number;
+    progress_percent?: number;
+    deadline_at?: string | null;
+    starts_now?: boolean;
+  }>;
+}
+
+export interface TeacherLibraryTest {
+  id: string;
+  title: string;
+  subject: string;
+  status: string;
+  questions_count: number;
+  created_at?: string;
+  updated_at?: string;
+  completions_count?: number;
+  classes?: string[];
+  time_limit_minutes?: number | null;
 }
 
 export interface TestDetailsResponse {
@@ -476,14 +542,28 @@ export async function testsCreate(accessToken: string, payload: TestCreatePayloa
   });
 }
 
-export async function testsAssign(accessToken: string, testId: string, classId: string, deadline: string): Promise<AssignTestResponse> {
+export async function testsAssign(
+  accessToken: string,
+  testId: string,
+  classIdOrPayload: string | TestAssignPayload,
+  deadline?: string
+): Promise<AssignTestResponse> {
+  const body: TestAssignPayload =
+    typeof classIdOrPayload === "string"
+      ? {
+          assignments: [{ class_id: classIdOrPayload, deadline: deadline || new Date().toISOString() }]
+        }
+      : classIdOrPayload;
+
   return request<AssignTestResponse>(`/tests/${testId}/assign`, {
     method: "POST",
     accessToken,
-    body: {
-      assignments: [{ class_id: classId, deadline }]
-    }
+    body
   });
+}
+
+export async function testsList(accessToken: string): Promise<TeacherLibraryTest[]> {
+  return request<TeacherLibraryTest[]>("/tests", { accessToken });
 }
 
 export async function testsGet(accessToken: string, testId: string): Promise<TestDetailsResponse> {
@@ -549,4 +629,19 @@ export async function analyticsTeacherDashboard(
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<TeacherDashboardResponse>(`/analytics/teacher/dashboard${suffix}`, { accessToken });
+}
+
+export async function analyticsTeacherDashboardSnapshot(
+  accessToken: string,
+  params: { period?: string; class_id?: string } = {}
+): Promise<TeacherDashboardAnalyticsResponse> {
+  const query = new URLSearchParams();
+  if (params.period) {
+    query.set("period", params.period);
+  }
+  if (params.class_id) {
+    query.set("class_id", params.class_id);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<TeacherDashboardAnalyticsResponse>(`/analytics/teacher/dashboard${suffix}`, { accessToken });
 }
